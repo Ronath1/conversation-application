@@ -9,7 +9,7 @@ import { apiFetch } from './api.js';
 
 const bodyEl = document.getElementById('settings-body');
 
-let cache = { settings: null, usage: null };
+let cache = { settings: null, usage: null, models: null };
 
 function element(tag, className, text) {
   const el = document.createElement(tag);
@@ -55,10 +55,90 @@ function renderProvider(settings) {
   row.append(select);
   panel.append(row);
 
+  return panel;
+}
+
+/**
+ * The model picker.
+ *
+ * The list comes from the provider, asked with this user's own key, so it
+ * shows what that key can reach rather than everything that exists. Any model
+ * can still be typed in by hand, because a list can always be behind.
+ */
+function renderModel(settings) {
   const active = settings.providers.find((provider) => provider.id === settings.activeProvider);
-  if (active) {
-    panel.append(element('p', 'hint', `Model: ${active.model}`));
+  const models = cache.models;
+
+  const panel = element('section', 'panel');
+  panel.append(element('h3', null, 'Model'));
+
+  const row = element('div', 'field-row');
+  const select = document.createElement('select');
+  select.id = 'model-select';
+  select.setAttribute('aria-label', 'Model');
+
+  const rows = models?.models || [{ id: active?.model, label: active?.model }];
+  for (const model of rows) {
+    let label = model.label || model.id;
+    if (model.free === true) label += '  (free)';
+    if (model.unlisted) label += '  (not listed by your key)';
+    select.append(new Option(label, model.id));
   }
+  select.append(new Option('Other model…', '__custom__'));
+  select.value = rows.some((model) => model.id === active?.model) ? active.model : rows[0]?.id;
+
+  const custom = document.createElement('input');
+  custom.type = 'text';
+  custom.placeholder = 'Type a model id, then press Enter';
+  custom.hidden = true;
+  custom.setAttribute('aria-label', 'Custom model id');
+
+  async function save(model) {
+    if (!model || model === '__custom__') return;
+    setNote(`Switching to ${model}…`);
+    try {
+      await api('/api/settings/model', { method: 'PUT', body: JSON.stringify({ provider: settings.activeProvider, model }) });
+      setNote(`Model set to ${model}. It applies to your next turn.`, 'ok');
+      await load();
+    } catch (error) {
+      setNote(error.message, 'error');
+    }
+  }
+
+  select.addEventListener('change', () => {
+    const choosingCustom = select.value === '__custom__';
+    custom.hidden = !choosingCustom;
+    if (choosingCustom) custom.focus();
+    else save(select.value);
+  });
+
+  custom.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    save(custom.value.trim());
+  });
+
+  row.append(select);
+  panel.append(row, custom);
+
+  // Where the list came from matters: a fallback list is not a promise that
+  // anything on it will work.
+  if (models?.source === 'provider') {
+    panel.append(element('p', 'hint', `${rows.length} models your ${active?.label} key can see.`));
+  } else if (models?.reason) {
+    panel.append(element('p', 'hint', models.reason));
+  }
+
+  const warning = element('div', 'model-warning');
+  warning.append(
+    element(
+      'p',
+      null,
+      'Not every model will work with every key. Access and cost depend on the provider and on what your account has paid for: a free key usually reaches only the cheaper models, and an expensive model may be refused or may charge your credit. If a model does not answer, choose another one here.',
+    ),
+  );
+  panel.append(warning);
+
   return panel;
 }
 
@@ -210,7 +290,13 @@ function render() {
   note.id = 'settings-note';
 
   const fragment = document.createDocumentFragment();
-  fragment.append(note, renderProvider(cache.settings), renderKey(cache.settings), renderUsage(cache.usage));
+  fragment.append(
+    note,
+    renderProvider(cache.settings),
+    renderKey(cache.settings),
+    renderModel(cache.settings),
+    renderUsage(cache.usage),
+  );
   bodyEl.replaceChildren(fragment);
 }
 
@@ -220,11 +306,13 @@ export async function load() {
   const previousClass = document.getElementById('settings-note')?.className;
 
   try {
-    const [settings, usage] = await Promise.all([
+    const [settings, usage, models] = await Promise.all([
       api('/api/settings'),
       api('/api/usage').catch(() => null),
+      // Never fatal: the picker falls back to what is already selected.
+      api('/api/models').catch(() => null),
     ]);
-    cache = { settings, usage };
+    cache = { settings, usage, models };
     render();
     if (previousNote) {
       const note = document.getElementById('settings-note');

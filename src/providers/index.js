@@ -12,6 +12,7 @@
  *   keyUrl                 string   where a user gets a key of their own
  *   generateReply(params)  -> { text, model, finishReason, usage }
  *   validateKey(apiKey)    -> { valid, reason?, warning? }
+ *   listModels(apiKey)     -> [{ id, label, free? }] the key can actually use
  *
  * `generateReply` takes { apiKey, messages, systemPrompt, model, temperature,
  * maxOutputTokens, json, responseSchema, lowLatency, timeoutMs, signal } and
@@ -25,11 +26,13 @@
 
 import geminiAdapter from './gemini.js';
 import claudeAdapter from './claude.js';
+import openaiAdapter from './openai.js';
+import openrouterAdapter from './openrouter.js';
 import { ErrorCode, ProviderError } from './errors.js';
 import * as keyStore from '../config/keyStore.js';
 import * as usageStore from '../usage/usageStore.js';
 
-const ADAPTERS = [geminiAdapter, claudeAdapter];
+const ADAPTERS = [geminiAdapter, claudeAdapter, openaiAdapter, openrouterAdapter];
 
 const byId = new Map(ADAPTERS.map((adapter) => [adapter.id, adapter]));
 

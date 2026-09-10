@@ -18,6 +18,7 @@ import aiRoutes from './routes/ai.js';
 import conversationRoutes from './routes/conversation.js';
 import reportRoutes from './routes/report.js';
 import usageRoutes from './routes/usage.js';
+import modelRoutes from './routes/models.js';
 
 const PUBLIC_DIR = path.resolve(fileURLToPath(new URL('../public', import.meta.url)));
 
@@ -56,6 +57,7 @@ app.use('/api', aiRoutes);
 app.use('/api', conversationRoutes);
 app.use('/api', reportRoutes);
 app.use('/api', usageRoutes);
+app.use('/api', modelRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error: { code: 'NOT_FOUND', message: `No route for ${req.method} ${req.path}` } });

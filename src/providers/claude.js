@@ -190,6 +190,17 @@ async function validateKey(apiKey, { timeoutMs = 10_000 } = {}) {
   }
 }
 
+/** The models this key can see, newest first as the provider returns them. */
+async function listModels(apiKey, { timeoutMs = 15_000 } = {}) {
+  try {
+    const page = await client(apiKey, timeoutMs).models.list({ limit: 100 });
+    const rows = page?.data || [];
+    return rows.filter((row) => row?.id).map((row) => ({ id: row.id, label: row.display_name || row.id }));
+  } catch (error) {
+    throw mapError(error);
+  }
+}
+
 const claudeAdapter = {
   id,
   label: 'Claude',
@@ -201,6 +212,7 @@ const claudeAdapter = {
   keyHint: 'Anthropic Console key (starts with sk-ant-). Usage is paid, with no free daily allowance.',
   generateReply,
   validateKey,
+  listModels,
 };
 
 export default claudeAdapter;

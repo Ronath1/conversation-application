@@ -227,6 +227,24 @@ async function validateKey(apiKey, { timeoutMs = 10_000 } = {}) {
   }
 }
 
+/**
+ * The models this key can see, filtered to the ones that can hold a
+ * conversation. The same endpoint lists embedding and image models.
+ */
+async function listModels(apiKey, { timeoutMs = 15_000 } = {}) {
+  const payload = await callGemini('/models?pageSize=200', { apiKey, timeoutMs });
+  const rows = Array.isArray(payload.models) ? payload.models : [];
+
+  return rows
+    .filter((row) => (row.supportedGenerationMethods || []).includes('generateContent'))
+    .map((row) => ({
+      // Names come back as "models/gemini-3.6-flash"; the app uses the bare id.
+      id: String(row.name || '').replace(/^models\//, ''),
+      label: row.displayName || String(row.name || '').replace(/^models\//, ''),
+    }))
+    .filter((row) => row.id);
+}
+
 const geminiAdapter = {
   id,
   label: 'Gemini',
@@ -238,6 +256,7 @@ const geminiAdapter = {
   keyHint: 'Google AI Studio key (starts with AIza). A Gemini consumer subscription does not grant API access.',
   generateReply,
   validateKey,
+  listModels,
 };
 
 export default geminiAdapter;

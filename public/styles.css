@@ -902,3 +902,20 @@ a.get-key-button:hover {
 .get-key .hint {
   margin-top: 8px;
 }
+
+/* ---------- model warning ---------- */
+
+.model-warning {
+  margin-top: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--fix-bg);
+  border: 1px solid var(--fix-line);
+  border-left: 3px solid var(--fix-accent);
+  border-radius: 8px;
+}
+
+.model-warning p {
+  margin: 0;
+}

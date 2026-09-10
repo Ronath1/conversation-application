@@ -22,6 +22,8 @@ const DOC_ID = 'app';
 const ENV_KEY_BY_PROVIDER = {
   gemini: 'GEMINI_API_KEY',
   claude: 'ANTHROPIC_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
 };
 
 const DEFAULT_CONFIG = {
