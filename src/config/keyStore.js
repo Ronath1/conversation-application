@@ -1,19 +1,15 @@
 /**
  * Persistent config store for API keys and per-provider settings.
  *
- * The key lives in data/config.json, not in code and not in the environment
+ * The key lives in the document store, not in code and not in the environment
  * beyond first-boot seeding, so the settings endpoint can swap it at runtime
- * without a restart or redeploy. Writes are atomic (temp file + rename) so a
- * crash mid-write cannot leave a truncated config behind.
+ * without a restart or redeploy.
  */
 
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { readJson, writeJsonAtomic } from '../lib/jsonFile.js';
+import { readDoc, writeDoc } from '../lib/store.js';
 
-const ROOT_DIR = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
-const DATA_DIR = path.join(ROOT_DIR, 'data');
-const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
+const COLLECTION = 'config';
+const DOC_ID = 'app';
 
 /** Environment variable consulted once, only if a provider has no stored key. */
 const ENV_KEY_BY_PROVIDER = {
@@ -26,17 +22,23 @@ const DEFAULT_CONFIG = {
   providers: {},
 };
 
-/** In-memory copy of the config. Written through on every change. */
+/**
+ * In-memory copy, written through on every change.
+ *
+ * Serverless runs many short-lived processes, so this is a per-process cache
+ * rather than shared state. Each one seeds itself on first use and reads its
+ * own copy; the store stays the source of truth.
+ */
 let cache = null;
-/** Serializes concurrent writes so two requests cannot clobber each other. */
+/** Serializes writes so two requests cannot clobber each other. */
 let writeChain = Promise.resolve();
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-async function readFromDisk() {
-  const parsed = await readJson(CONFIG_PATH, null);
+async function readFromStore() {
+  const parsed = await readDoc(COLLECTION, DOC_ID);
   if (!parsed) return clone(DEFAULT_CONFIG);
   return {
     activeProvider: parsed.activeProvider || DEFAULT_CONFIG.activeProvider,
@@ -47,20 +49,20 @@ async function readFromDisk() {
 /** Queues a write so overlapping requests apply in order. */
 function persist(config) {
   writeChain = writeChain.then(
-    () => writeJsonAtomic(CONFIG_PATH, config),
-    () => writeJsonAtomic(CONFIG_PATH, config),
+    () => writeDoc(COLLECTION, DOC_ID, config),
+    () => writeDoc(COLLECTION, DOC_ID, config),
   );
   return writeChain;
 }
 
 /**
- * Loads config from disk and seeds any missing key from the environment.
- * Seeding happens once: after the first write the file is the source of truth.
+ * Loads config and seeds any missing key from the environment.
+ * Seeding happens once: after the first write the store is the source of truth.
  */
 export async function load() {
   if (cache) return cache;
 
-  const config = await readFromDisk();
+  const config = await readFromStore();
   let seeded = false;
 
   for (const [providerId, envVar] of Object.entries(ENV_KEY_BY_PROVIDER)) {
@@ -84,10 +86,6 @@ export async function load() {
 /** Drops the in-memory copy. Used by tests. */
 export function resetCache() {
   cache = null;
-}
-
-export function getConfigPath() {
-  return CONFIG_PATH;
 }
 
 export async function getActiveProviderId() {

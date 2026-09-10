@@ -1,22 +1,18 @@
 /**
- * Session storage: one JSON file per session under data/sessions/.
+ * Session storage: one document per session.
  *
  * A session holds the full turn history, including every correction. The
- * mistake report in a later step reads these same files, so a correction is
- * kept whether or not it is still on screen.
+ * mistake report reads these same documents, so a correction is kept whether
+ * or not it is still on screen.
  */
 
-import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
-import { promises as fs } from 'node:fs';
-import { listJsonFiles, readJson, writeJsonAtomic } from '../lib/jsonFile.js';
+import { deleteDoc, listDocs, readDoc, writeDoc } from '../lib/store.js';
 import { DEFAULT_DIFFICULTY, DEFAULT_TOPIC } from './prompt.js';
 
-const ROOT_DIR = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
-const SESSIONS_DIR = path.join(ROOT_DIR, 'data', 'sessions');
+const COLLECTION = 'sessions';
 
-/** Ids come from randomUUID, so anything else is a bad or hostile path. */
+/** Ids come from randomUUID, so anything else is a bad or hostile id. */
 const SESSION_ID_PATTERN = /^sess_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
@@ -24,6 +20,10 @@ const SESSION_ID_PATTERN = /^sess_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4
  * inside this chain: serializing only the write would let two overlapping
  * requests both read the old session and the later write would drop the
  * earlier change.
+ *
+ * This holds within one process. Two server instances writing to the same
+ * session at the same moment could still overlap, which for a single user
+ * talking into one browser tab does not arise.
  */
 const writeChains = new Map();
 
@@ -31,13 +31,12 @@ export function isValidSessionId(sessionId) {
   return typeof sessionId === 'string' && SESSION_ID_PATTERN.test(sessionId);
 }
 
-function sessionPath(sessionId) {
+function assertValid(sessionId) {
   if (!isValidSessionId(sessionId)) throw new Error(`Invalid session id: ${sessionId}`);
-  return path.join(SESSIONS_DIR, `${sessionId}.json`);
 }
 
 function persist(session) {
-  return writeJsonAtomic(sessionPath(session.id), session);
+  return writeDoc(COLLECTION, session.id, session);
 }
 
 /**
@@ -45,8 +44,8 @@ function persist(session) {
  * to the same session.
  *
  * @param {string} sessionId
- * @param {(session: object) => any} mutate Returns a value passed back to the caller.
- *   Returning undefined means "no change"; nothing is written.
+ * @param {(session: object) => any} mutator Returns a value passed back to the
+ *   caller. Returning undefined means "no change"; nothing is written.
  */
 function mutate(sessionId, mutator) {
   const previous = writeChains.get(sessionId) || Promise.resolve();
@@ -65,10 +64,11 @@ function mutate(sessionId, mutator) {
 }
 
 export async function createSession({ topic = DEFAULT_TOPIC, difficulty = DEFAULT_DIFFICULTY, provider = null } = {}) {
+  const now = new Date().toISOString();
   const session = {
     id: `sess_${randomUUID()}`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
     endedAt: null,
     topic,
     difficulty,
@@ -81,11 +81,12 @@ export async function createSession({ topic = DEFAULT_TOPIC, difficulty = DEFAUL
 
 export async function getSession(sessionId) {
   if (!isValidSessionId(sessionId)) return null;
-  return readJson(sessionPath(sessionId), null);
+  return readDoc(COLLECTION, sessionId);
 }
 
 /** Appends a completed turn: what the user said, the reply, any corrections. */
 export async function appendTurn(sessionId, turn) {
+  assertValid(sessionId);
   return mutate(sessionId, (session) => {
     const record = {
       id: `turn_${session.turns.length + 1}`,
@@ -99,6 +100,7 @@ export async function appendTurn(sessionId, turn) {
 }
 
 export async function updateSession(sessionId, patch) {
+  assertValid(sessionId);
   return mutate(sessionId, (session) => {
     Object.assign(session, patch, { updatedAt: new Date().toISOString() });
     return session;
@@ -106,6 +108,7 @@ export async function updateSession(sessionId, patch) {
 }
 
 export async function endSession(sessionId) {
+  assertValid(sessionId);
   return mutate(sessionId, (session) => {
     // Already ended: return the session without rewriting the end time.
     if (session.endedAt) return undefined;
@@ -117,51 +120,28 @@ export async function endSession(sessionId) {
 
 /** Newest first. Summary rows only, without turn bodies. */
 export async function listSessions({ limit = 50 } = {}) {
-  const files = await listJsonFiles(SESSIONS_DIR);
-  const sessions = [];
-
-  for (const file of files) {
-    const session = await readJson(path.join(SESSIONS_DIR, file), null);
-    if (!session?.id) continue;
-    sessions.push({
-      id: session.id,
-      createdAt: session.createdAt,
-      updatedAt: session.updatedAt,
-      endedAt: session.endedAt,
-      topic: session.topic,
-      difficulty: session.difficulty,
-      turnCount: session.turns?.length || 0,
-      mistakeCount: (session.turns || []).reduce((total, turn) => total + (turn.corrections?.length || 0), 0),
-    });
-  }
-
-  sessions.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-  return sessions.slice(0, limit);
+  const sessions = await readAllSessions();
+  return sessions.slice(0, limit).map((session) => ({
+    id: session.id,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    endedAt: session.endedAt,
+    topic: session.topic,
+    difficulty: session.difficulty,
+    turnCount: session.turns?.length || 0,
+    mistakeCount: (session.turns || []).reduce((total, turn) => total + (turn.corrections?.length || 0), 0),
+  }));
 }
 
-/** Reads every stored session in full. The mistake report builds on this. */
+/** Every stored session in full, newest first. The mistake report builds on this. */
 export async function readAllSessions() {
-  const files = await listJsonFiles(SESSIONS_DIR);
-  const sessions = [];
-  for (const file of files) {
-    const session = await readJson(path.join(SESSIONS_DIR, file), null);
-    if (session?.id) sessions.push(session);
-  }
+  const sessions = (await listDocs(COLLECTION)).filter((session) => session?.id);
   sessions.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   return sessions;
 }
 
 export async function deleteSession(sessionId) {
   if (!isValidSessionId(sessionId)) return false;
-  try {
-    await fs.unlink(sessionPath(sessionId));
-    return true;
-  } catch (error) {
-    if (error.code === 'ENOENT') return false;
-    throw error;
-  }
-}
-
-export function getSessionsDir() {
-  return SESSIONS_DIR;
+  writeChains.delete(sessionId);
+  return deleteDoc(COLLECTION, sessionId);
 }

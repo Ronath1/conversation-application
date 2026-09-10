@@ -73,6 +73,7 @@ You can skip `.env` entirely and paste the key into the Settings screen instead.
 | `GEMINI_MODEL` | Overrides the default model (`gemini-3.6-flash`). |
 | `ANTHROPIC_MODEL` | Overrides the default model (`claude-opus-5`). |
 | `PORT` | Defaults to `3000`. |
+| `DATABASE_URL` | A Postgres connection string. When set, everything is stored in Postgres instead of on disk. Leave it unset for local development. |
 
 Environment variables only seed the store on first boot. After that `data/config.json` is the source of truth, so a key changed in Settings is not overwritten on the next restart.
 
@@ -94,9 +95,12 @@ The reply and the corrections come back together in a single structured JSON res
 
 ### Storage
 
-Sessions, the API key and usage counts are JSON files under `data/`, written atomically. Every change to a session runs read, modify and write inside a per-session queue, so two overlapping requests cannot lose each other's work.
+Everything the app keeps — the API key, sessions, usage counts — is a small JSON document with a collection and an id. `src/lib/store.js` is the only file that knows where those documents actually live, and it has two drivers:
 
-`data/` is gitignored. Deleting it resets the app.
+- **Files** (default): `data/<collection>/<id>.json`, written atomically. No database needed, so local development works with zero setup. `data/` is gitignored; deleting it resets the app.
+- **Postgres**: a single `documents` table, used when `DATABASE_URL` is set. Serverless hosts have no writable disk, so this is what makes deployment possible.
+
+The three stores that sit on top of it (`keyStore`, `sessionStore`, `usageStore`) call the same four functions either way. Every change to a session runs read, modify and write inside a per-session queue, so two overlapping requests cannot lose each other's work.
 
 ### Usage tracking
 
@@ -164,12 +168,11 @@ The stored API key is never returned. Responses carry a masked form such as `AIz
 - No live quota data is available from any provider; the usage figure is the app's own count.
 - The free tier rate-limits per minute as well as per day. Several turns in quick succession can hit it; the app reports this as "key exhausted" rather than failing silently.
 
-## Before deploying this anywhere
+## Deploying
 
-This is built to run locally and is not ready to be exposed on the internet as-is:
+**Storage is handled.** Set `DATABASE_URL` to a Postgres connection string and nothing is written to disk. `vercel.json` and `api/index.js` are in place, so Vercel runs the Express app as a function.
 
-- **Everything persists to the filesystem.** Any serverless host (Vercel, Netlify Functions, Lambda) has a read-only or ephemeral filesystem, so the key, your sessions and the whole mistake report would silently reset. A host with a persistent disk runs it unchanged; a serverless host needs the three stores moved to a database first.
-- **There is no authentication.** Anyone with the URL could spend your API key, replace it, or read and delete your history. A shared password or a single-user login is the minimum before it goes public.
+**Authentication is not.** Anyone with the URL could spend your API key, replace it, or read and delete your history. A shared password or a single-user login is the minimum before the URL goes anywhere.
 
 ## Project spec
 

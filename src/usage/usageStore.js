@@ -7,17 +7,13 @@
  * made outside this app, from the same key, are invisible to it.
  */
 
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { readJson, writeJsonAtomic } from '../lib/jsonFile.js';
+import { readDoc, writeDoc } from '../lib/store.js';
 
-const ROOT_DIR = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
-const USAGE_PATH = path.join(ROOT_DIR, 'data', 'usage.json');
+const COLLECTION = 'usage';
 
-/** Days of history kept. Enough for a weekly look back, small on disk. */
+/** Days of history kept. Enough for a weekly look back, small to store. */
 const RETAIN_DAYS = 30;
 
-let cache = null;
 let writeChain = Promise.resolve();
 
 /** Local calendar date, because a daily quota resets on the provider's clock, not UTC. */
@@ -25,10 +21,20 @@ export function today() {
   return new Date().toLocaleDateString('en-CA');
 }
 
-async function load() {
-  if (!cache) cache = (await readJson(USAGE_PATH, null)) || { providers: {} };
-  if (!cache.providers) cache.providers = {};
-  return cache;
+function emptyDay() {
+  return { requests: 0, failures: 0, rateLimited: 0 };
+}
+
+/**
+ * One document per provider, holding that provider's days.
+ *
+ * Read fresh on every call rather than cached: on a serverless host the next
+ * request may run in a different process, and a stale count would overwrite a
+ * newer one.
+ */
+async function readProvider(providerId) {
+  const stored = await readDoc(COLLECTION, providerId);
+  return stored && typeof stored.days === 'object' ? stored : { days: {} };
 }
 
 function prune(days) {
@@ -44,18 +50,6 @@ function prune(days) {
   }
 }
 
-function persist(snapshot) {
-  writeChain = writeChain.then(
-    () => writeJsonAtomic(USAGE_PATH, snapshot),
-    () => writeJsonAtomic(USAGE_PATH, snapshot),
-  );
-  return writeChain;
-}
-
-function emptyDay() {
-  return { requests: 0, failures: 0, rateLimited: 0 };
-}
-
 /**
  * Records one reply request. Counted whether it succeeded or not, because a
  * rejected request still counted against the provider's limit.
@@ -66,29 +60,32 @@ function emptyDay() {
  * @param {string} [outcome.code] Error code, when the request failed.
  */
 export async function recordRequest(providerId, { ok = true, code } = {}) {
-  const usage = await load();
-  const days = (usage.providers[providerId] ||= {});
-  const day = (days[today()] ||= emptyDay());
+  // Queued so two turns finishing together cannot both write the same count.
+  writeChain = writeChain.catch(() => {}).then(async () => {
+    const usage = await readProvider(providerId);
+    const day = (usage.days[today()] ||= emptyDay());
 
-  day.requests += 1;
-  if (!ok) day.failures += 1;
-  if (code === 'RATE_LIMITED' || code === 'QUOTA_EXHAUSTED') day.rateLimited += 1;
-  day.lastAt = new Date().toISOString();
+    day.requests += 1;
+    if (!ok) day.failures += 1;
+    if (code === 'RATE_LIMITED' || code === 'QUOTA_EXHAUSTED') day.rateLimited += 1;
+    day.lastAt = new Date().toISOString();
 
-  prune(days);
-  await persist(JSON.parse(JSON.stringify(usage)));
-  return day;
+    prune(usage.days);
+    await writeDoc(COLLECTION, providerId, usage);
+    return day;
+  });
+
+  return writeChain;
 }
 
 export async function getDay(providerId, date = today()) {
-  const usage = await load();
-  return { ...emptyDay(), ...(usage.providers[providerId]?.[date] || {}) };
+  const usage = await readProvider(providerId);
+  return { ...emptyDay(), ...(usage.days[date] || {}) };
 }
 
 /** Recent days, oldest first, for a small history in the settings panel. */
 export async function getRecentDays(providerId, dayCount = 7) {
-  const usage = await load();
-  const days = usage.providers[providerId] || {};
+  const usage = await readProvider(providerId);
   const now = new Date();
   const out = [];
 
@@ -96,11 +93,7 @@ export async function getRecentDays(providerId, dayCount = 7) {
     const date = new Date(now);
     date.setDate(now.getDate() - i);
     const key = date.toLocaleDateString('en-CA');
-    out.push({ date: key, ...emptyDay(), ...(days[key] || {}) });
+    out.push({ date: key, ...emptyDay(), ...(usage.days[key] || {}) });
   }
   return out;
-}
-
-export function resetCache() {
-  cache = null;
 }
