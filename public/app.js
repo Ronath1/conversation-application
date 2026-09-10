@@ -3,6 +3,9 @@
  *
  * Scope so far: mic, speech-to-text, the text conversation, spoken replies and
  * the correction shown beside the current turn.
+ *
+ * The conversation is hands free. One tap starts it; the mic then reopens
+ * after every reply until the user taps stop.
  */
 
 import * as speech from './speech.js';
@@ -45,6 +48,10 @@ const state = {
   listening: false,
   busy: false,
   speaking: false,
+  /** True while the conversation runs hands free: mic reopens after each reply. */
+  handsFree: false,
+  /** Set when we cut speech off ourselves, so it does not look like a natural end. */
+  speechCancelled: false,
   autoSpeak: true,
   voiceURI: '',
   /** The last reply, kept so "Repeat that" works after more turns are added. */
@@ -86,7 +93,7 @@ function clearConversation() {
   const hint = document.createElement('p');
   hint.className = 'empty';
   hint.id = 'empty-state';
-  hint.textContent = 'Tap the mic and start talking.';
+  hint.textContent = 'Tap the mic once. It keeps listening between replies.';
   conversationEl.replaceChildren(hint);
 }
 
@@ -245,8 +252,7 @@ function showSummary(summary) {
 async function endSession() {
   if (!state.sessionId || state.ended) return;
 
-  if (state.listening) recognition?.stop();
-  stopSpeaking();
+  stopConversation();
 
   endSessionButton.disabled = true;
   try {
@@ -266,14 +272,26 @@ function showLiveTranscript(text) {
   liveEl.hidden = !text;
 }
 
-/** The mic is the only control that can start a request, so it gates on both flags. */
+/**
+ * One button runs the whole conversation, so its label has to say what the
+ * next tap does and what the app is doing right now.
+ */
+function micLabelText() {
+  if (!recognition) return 'Mic unavailable';
+  if (!state.handsFree) return 'Tap to talk';
+  if (state.listening) return 'Listening — tap to stop';
+  if (state.busy) return 'Thinking — tap to stop';
+  if (state.speaking) return 'Speaking — tap to stop';
+  return 'Tap to stop';
+}
+
 function updateControls() {
-  const canTalk = Boolean(state.sessionId) && !state.busy && !state.ended;
+  const canTalk = Boolean(state.sessionId) && !state.ended;
+  // Stays clickable while thinking or speaking, because it is also the stop control.
   micButton.disabled = !canTalk || !recognition;
-  micButton.setAttribute('aria-pressed', String(state.listening));
-  if (!recognition) micLabel.textContent = 'Mic unavailable';
-  else micLabel.textContent = state.listening ? 'Tap to stop' : 'Tap to talk';
-  typedInput.disabled = !canTalk;
+  micButton.setAttribute('aria-pressed', String(state.handsFree));
+  micLabel.textContent = micLabelText();
+  typedInput.disabled = !canTalk || state.busy;
   endSessionButton.disabled = !state.sessionId || state.ended || state.busy;
   topicSelect.disabled = !state.sessionId || state.ended;
   difficultySelect.disabled = !state.sessionId || state.ended;
@@ -296,7 +314,7 @@ function paintSpokenWord(el, text, range) {
 }
 
 function speakReply(text, el) {
-  if (!speech.isSupported || !text) return;
+  if (!speech.isSupported || !text) return false;
 
   const started = speech.speak(text, {
     voice: speech.findVoice(state.voiceURI),
@@ -312,14 +330,19 @@ function speakReply(text, el) {
       el?.classList.remove('speaking');
       paintSpokenWord(el, text, null);
       updateControls();
+      // The reply has finished playing, so it is the user's turn again.
+      if (!state.speechCancelled) resumeListening();
+      state.speechCancelled = false;
     },
   });
 
   if (!started) setStatus('This browser could not speak the reply.', true);
+  return started;
 }
 
 function stopSpeaking() {
   if (!state.speaking) return;
+  state.speechCancelled = true;
   speech.stop();
   state.speaking = false;
   if (state.lastReplyEl) {
@@ -417,6 +440,7 @@ async function sendTurn(text) {
   updateControls();
 
   const pending = addTurn('ai pending', 'Thinking…');
+  let handBackMic = false;
 
   try {
     const result = await api(`/api/sessions/${state.sessionId}/turns`, {
@@ -429,21 +453,24 @@ async function sendTurn(text) {
     state.lastReplyEl = pending;
     setStatus('');
     showCorrections(userTurnEl, result.corrections);
-    if (state.autoSpeak) speakReply(result.reply, pending);
+    // When a reply is spoken, the mic reopens when that speech ends. When it
+    // is not, there is nothing to wait for.
+    handBackMic = !(state.autoSpeak && speakReply(result.reply, pending));
   } catch (error) {
     pending.className = 'turn error';
     pending.textContent = error.message;
     // A missing or rejected key is a settings problem, not a speech problem.
-    setStatus(
+    const guidance =
       error.code === 'MISSING_KEY' || error.code === 'INVALID_KEY'
-        ? 'Open Settings and add a working API key, then try again.'
-        : '',
-      true,
-    );
+        ? 'Open Settings and add a working API key, then tap to talk again.'
+        : 'Tap to talk when you want to carry on.';
+    // Stop rather than reopen the mic, so a broken key cannot spin in a loop.
+    stopConversation(guidance, true);
   } finally {
     state.busy = false;
     updateControls();
     scrollToBottom();
+    if (handBackMic) resumeListening();
   }
 }
 
@@ -459,9 +486,60 @@ const SPEECH_ERROR_MESSAGE = {
   network: 'Speech recognition could not reach its network service.',
 };
 
+/**
+ * Silence that ends a turn. Learners pause mid-sentence, so this is longer
+ * than a native speaker would need.
+ */
+const SILENCE_MS = 2000;
+
+/**
+ * Guard against a mic that hears nothing at all. Without it a broken or muted
+ * microphone would restart forever with no sign of what is wrong.
+ */
+const MAX_EMPTY_RESTARTS = 20;
+
 let recognition = null;
-/** Final text collected across results, sent as one turn when the user stops. */
+/** Final text collected across results, sent as one turn when the user pauses. */
 let finalTranscript = '';
+let silenceTimer = null;
+let emptyRestarts = 0;
+
+function clearSilenceTimer() {
+  if (silenceTimer) clearTimeout(silenceTimer);
+  silenceTimer = null;
+}
+
+/**
+ * Ends the turn once the user has stopped talking.
+ * Only fires when something was actually said: silence before the first word
+ * means the user is still thinking, so the mic stays open.
+ */
+function armSilenceTimer() {
+  clearSilenceTimer();
+  silenceTimer = setTimeout(() => {
+    if (finalTranscript.trim()) recognition?.stop();
+  }, SILENCE_MS);
+}
+
+/** Opens the mic again for the next turn, unless the user has stopped. */
+function resumeListening() {
+  if (!state.handsFree || state.ended || !recognition) return;
+  if (state.listening || state.busy) return;
+  try {
+    recognition.start();
+  } catch {
+    // start() throws while the previous run is still winding down.
+    setTimeout(() => {
+      if (state.handsFree && !state.listening && !state.busy) {
+        try {
+          recognition.start();
+        } catch {
+          stopConversation('The microphone could not be reopened. Tap to talk to start again.');
+        }
+      }
+    }, 300);
+  }
+}
 
 function setUpRecognition() {
   if (!SpeechRecognitionClass) {
@@ -473,7 +551,8 @@ function setUpRecognition() {
 
   const instance = new SpeechRecognitionClass();
   instance.lang = 'en-US';
-  // Continuous so the user controls when the turn ends, not a silence timer.
+  // Continuous, with our own pause detection, so a mid-sentence breath does
+  // not end the turn the way the browser's own endpointing would.
   instance.continuous = true;
   instance.interimResults = true;
 
@@ -492,41 +571,92 @@ function setUpRecognition() {
       else interim += result[0].transcript;
     }
     showLiveTranscript(`${finalTranscript}${interim}`.trim());
+    // Every word heard restarts the clock; the turn ends when the words stop.
+    armSilenceTimer();
   });
 
   instance.addEventListener('error', (event) => {
     // `aborted` fires whenever we stop the mic ourselves. Not worth reporting.
     if (event.error === 'aborted') return;
-    setStatus(SPEECH_ERROR_MESSAGE[event.error] || `Speech recognition error: ${event.error}`, true);
+    // Silence is expected while waiting for the user to begin, so it is not
+    // an error worth showing during a hands-free conversation.
+    if (event.error === 'no-speech' && state.handsFree) return;
+
+    const message = SPEECH_ERROR_MESSAGE[event.error] || `Speech recognition error: ${event.error}`;
+    // A blocked or missing microphone will not fix itself on a retry.
+    if (event.error === 'not-allowed' || event.error === 'service-not-allowed' || event.error === 'audio-capture') {
+      stopConversation(message, true);
+      return;
+    }
+    setStatus(message, true);
   });
 
   instance.addEventListener('end', () => {
     state.listening = false;
+    clearSilenceTimer();
     updateControls();
+
     const text = finalTranscript.trim();
     finalTranscript = '';
     showLiveTranscript('');
-    if (text) sendTurn(text);
-    else if (!statusEl.classList.contains('error')) setStatus('');
+
+    if (text) {
+      emptyRestarts = 0;
+      sendTurn(text);
+      return;
+    }
+
+    if (!statusEl.classList.contains('error')) setStatus('');
+
+    // The browser ends recognition on its own after a stretch of silence.
+    // In a hands-free conversation that is just the user still thinking.
+    if (state.handsFree) {
+      emptyRestarts += 1;
+      if (emptyRestarts > MAX_EMPTY_RESTARTS) {
+        stopConversation('I stopped listening because I heard nothing. Check the microphone, then tap to talk.', true);
+        return;
+      }
+      setTimeout(resumeListening, 300);
+    }
   });
 
   return instance;
 }
 
-function toggleMic() {
-  if (!recognition || state.busy) return;
-  if (state.listening) {
-    recognition.stop();
-    return;
-  }
-  // Talking over the AI should cut it off, the way it would in a real conversation.
+/**
+ * Starts a hands-free conversation.
+ *
+ * One tap opens the mic and keeps it open: the turn ends when the user stops
+ * talking, and the mic reopens once the reply has been spoken. The mic is
+ * deliberately closed while the AI talks, so its own voice is never heard back
+ * as the next thing the user said.
+ */
+function startConversation() {
+  if (!recognition || !state.sessionId || state.ended) return;
+  state.handsFree = true;
+  emptyRestarts = 0;
   stopSpeaking();
-  try {
-    recognition.start();
-  } catch {
-    // start() throws if the previous run has not fully stopped. One retry is enough.
-    setTimeout(() => recognition.start(), 250);
-  }
+  updateControls();
+  resumeListening();
+}
+
+/** Ends the hands-free conversation. Nothing restarts until the user taps again. */
+function stopConversation(message = '', isError = false) {
+  state.handsFree = false;
+  clearSilenceTimer();
+  // Whatever was being said is dropped: stop means stop.
+  finalTranscript = '';
+  if (state.listening) recognition?.stop();
+  stopSpeaking();
+  showLiveTranscript('');
+  setStatus(message, isError);
+  updateControls();
+}
+
+function toggleMic() {
+  if (!recognition) return;
+  if (state.handsFree) stopConversation();
+  else startConversation();
 }
 
 /* ---------- wiring ---------- */
@@ -569,8 +699,7 @@ typedForm.addEventListener('submit', (event) => {
 });
 
 newSessionButton.addEventListener('click', async () => {
-  if (state.listening) recognition?.stop();
-  stopSpeaking();
+  stopConversation();
   state.lastReply = null;
   state.lastReplyEl = null;
   clearConversation();
@@ -603,6 +732,9 @@ function showScreen(name) {
   }
 
   const onConversation = name === 'conversation';
+  // Leaving the conversation screen closes the mic: listening on a screen with
+  // no mic button and no transcript would be invisible.
+  if (!onConversation && state.handsFree) stopConversation();
   for (const el of liveControls) el.hidden = !onConversation;
   // The live transcript strip has its own empty rule; do not force it back on.
   if (onConversation) showLiveTranscript(liveTextEl.textContent);
