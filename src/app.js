@@ -11,6 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import * as keyStore from './config/keyStore.js';
+import { requirePassword } from './middleware/auth.js';
 import { isProviderError } from './providers/errors.js';
 import settingsRoutes from './routes/settings.js';
 import aiRoutes from './routes/ai.js';
@@ -22,6 +23,10 @@ const PUBLIC_DIR = path.resolve(fileURLToPath(new URL('../public', import.meta.u
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
+
+// In front of everything, including the page itself, so an unlocked app never
+// serves the screen that holds the key field.
+app.use(requirePassword);
 
 // The frontend is plain files: same origin, same port, no build step and no proxy.
 app.use(express.static(PUBLIC_DIR));

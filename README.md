@@ -74,6 +74,7 @@ You can skip `.env` entirely and paste the key into the Settings screen instead.
 | `ANTHROPIC_MODEL` | Overrides the default model (`claude-opus-5`). |
 | `PORT` | Defaults to `3000`. |
 | `DATABASE_URL` | A Postgres connection string. When set, everything is stored in Postgres instead of on disk. Leave it unset for local development. |
+| `APP_PASSWORD` | When set, the whole app asks for this password. Leave it unset locally; set it anywhere reachable from the internet. |
 
 Environment variables only seed the store on first boot. After that the stored config is the source of truth, so a key changed in Settings is not overwritten on the next restart.
 
@@ -175,7 +176,14 @@ The stored API key is never returned. Responses carry a masked form such as `AIz
 
 **Storage is handled.** Set `DATABASE_URL` to a Postgres connection string and nothing is written to disk. `vercel.json` and `api/index.js` are in place, so Vercel runs the Express app as a function.
 
-**Authentication is not.** Anyone with the URL could spend your API key, replace it, or read and delete your history. A shared password or a single-user login is the minimum before the URL goes anywhere.
+**Set `APP_PASSWORD`.** Without it the app is open, and anyone with the URL could spend your API key, replace it, or read and delete your history. With it set, the browser asks for a password before anything loads, including the settings screen. Any user name works at the prompt; only the password is checked.
+
+The order that works on Vercel:
+
+1. Deploy the project once with no environment variables. Nothing can be spent, because there is no key yet.
+2. Attach a Neon Postgres database to the project. Vercel adds `DATABASE_URL` for you.
+3. Add `APP_PASSWORD` and your provider key as environment variables.
+4. Redeploy, so the new variables are picked up.
 
 ## Project spec
 
