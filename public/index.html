@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>English Conversation Practice</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>English Conversation Practice</h1>
+      <nav class="tabs" aria-label="Screens">
+        <button id="tab-conversation" class="tab" type="button" aria-selected="true">Conversation</button>
+        <button id="tab-report" class="tab" type="button" aria-selected="false">Mistake report</button>
+        <button id="tab-settings" class="tab" type="button" aria-selected="false">Settings</button>
+      </nav>
+      <button id="new-session" class="ghost" type="button">New session</button>
+    </header>
+
+    <div class="session-bar" id="session-bar">
+      <label class="picker">
+        <span class="sr-only">Topic</span>
+        <select id="topic-select" aria-label="Topic"></select>
+      </label>
+      <label class="picker">
+        <span class="sr-only">Difficulty</span>
+        <select id="difficulty-select" aria-label="Difficulty"></select>
+      </label>
+      <button id="end-session" class="ghost" type="button">End session</button>
+    </div>
+
+    <main class="conversation" id="conversation" aria-live="polite" aria-label="Conversation">
+      <p class="empty" id="empty-state">Pick a topic, tap the mic and start talking.</p>
+    </main>
+
+    <section class="report" id="report-view" aria-label="Mistake report" hidden>
+      <div class="report-head">
+        <h2>Mistake report</h2>
+        <button id="report-refresh" class="ghost" type="button">Refresh</button>
+      </div>
+      <div id="report-body">
+        <p class="empty">Loading…</p>
+      </div>
+    </section>
+
+    <section class="report" id="settings-view" aria-label="Settings" hidden>
+      <div class="report-head">
+        <h2>Settings</h2>
+        <button id="settings-refresh" class="ghost" type="button">Refresh</button>
+      </div>
+      <div id="settings-body">
+        <p class="empty">Loading…</p>
+      </div>
+    </section>
+
+    <div class="live" id="live" hidden>
+      <span class="live-label">Hearing:</span>
+      <span id="live-text"></span>
+    </div>
+
+    <p class="status" id="status" role="status"></p>
+
+    <footer class="controls">
+      <div class="audio-row">
+        <label class="toggle">
+          <input type="checkbox" id="auto-speak" checked />
+          <span id="auto-speak-label">Speak replies</span>
+        </label>
+
+        <label class="voice">
+          <span class="sr-only">AI voice</span>
+          <select id="voice" aria-label="AI voice">
+            <option value="">Default voice</option>
+          </select>
+        </label>
+
+        <button id="repeat" class="ghost" type="button" disabled>Repeat that</button>
+      </div>
+
+      <button id="mic" class="mic" type="button" aria-pressed="false">
+        <span class="mic-icon" aria-hidden="true"></span>
+        <span id="mic-label">Tap to talk</span>
+      </button>
+
+      <form class="typed" id="typed-form">
+        <label class="sr-only" for="typed-input">Type instead of speaking</label>
+        <input
+          id="typed-input"
+          type="text"
+          placeholder="…or type here and press Enter"
+          autocomplete="off"
+          maxlength="2000"
+        />
+        <button type="submit" class="ghost">Send</button>
+      </form>
+    </footer>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
