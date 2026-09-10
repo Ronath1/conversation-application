@@ -5,6 +5,8 @@
  * screen can show which key is in use without ever holding the key itself.
  */
 
+import { apiFetch } from './api.js';
+
 const bodyEl = document.getElementById('settings-body');
 
 let cache = { settings: null, usage: null };
@@ -23,19 +25,7 @@ function setNote(message, kind = 'note') {
   note.className = `settings-note ${kind}`;
 }
 
-async function api(path, options = {}) {
-  const response = await fetch(path, {
-    headers: options.body ? { 'content-type': 'application/json' } : undefined,
-    ...options,
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    const error = new Error(payload?.error?.message || `Request failed (${response.status}).`);
-    error.code = payload?.error?.code;
-    throw error;
-  }
-  return payload;
-}
+const api = apiFetch;
 
 /* ---------- sections ---------- */
 
@@ -87,6 +77,29 @@ function renderKey(settings) {
     status.append(element('span', 'pill warn', 'No key'), ' Add one below to start talking.');
   }
   panel.append(status);
+
+  if (active?.keyUrl) {
+    const getKey = element('div', 'get-key');
+    getKey.append(element('p', 'get-key-title', `Do not have a ${active.label} key yet?`));
+
+    const link = document.createElement('a');
+    link.className = 'primary get-key-button';
+    link.href = active.keyUrl;
+    link.target = '_blank';
+    // Stops the new tab from being able to reach back into this one.
+    link.rel = 'noopener noreferrer';
+    link.textContent = `Get a ${active.label} API key`;
+    getKey.append(link);
+
+    getKey.append(
+      element(
+        'p',
+        'hint',
+        'Opens in a new tab. Create the key there, copy it, then paste it below. The key is yours and is only used by your account.',
+      ),
+    );
+    panel.append(getKey);
+  }
 
   const form = document.createElement('form');
   form.className = 'field-row';

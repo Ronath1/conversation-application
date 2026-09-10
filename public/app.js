@@ -11,6 +11,8 @@
 import * as speech from './speech.js';
 import * as report from './report.js';
 import * as settings from './settings.js';
+import * as auth from './auth.js';
+import { apiFetch } from './api.js';
 
 const conversationEl = document.getElementById('conversation');
 const liveEl = document.getElementById('live');
@@ -354,20 +356,7 @@ function stopSpeaking() {
 
 /* ---------- API ---------- */
 
-async function api(path, options = {}) {
-  const response = await fetch(path, {
-    headers: options.body ? { 'content-type': 'application/json' } : undefined,
-    ...options,
-  });
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    const error = new Error(payload?.error?.message || `Request failed (${response.status}).`);
-    error.code = payload?.error?.code || 'HTTP_ERROR';
-    throw error;
-  }
-  return payload;
-}
+const api = apiFetch;
 
 async function startSession() {
   state.sessionId = null;
@@ -778,7 +767,89 @@ function setUpVoices() {
   });
 }
 
-recognition = setUpRecognition();
-setUpVoices();
-updateControls();
-loadConversationOptions().then(startSession);
+/* ---------- sign in ---------- */
+
+const authOverlay = document.getElementById('auth-overlay');
+const signInMount = document.getElementById('clerk-sign-in');
+const signUpMount = document.getElementById('clerk-sign-up');
+const mounted = { 'sign-in': false, 'sign-up': false };
+const authError = document.getElementById('auth-error');
+const signInTab = document.getElementById('tab-sign-in');
+const signUpTab = document.getElementById('tab-sign-up');
+const signOutButton = document.getElementById('sign-out');
+
+/** Swaps between the sign-in and the create-account form, both from Clerk. */
+function showAuthForm(mode) {
+  const signingUp = mode === 'sign-up';
+
+  signInTab.setAttribute('aria-selected', String(!signingUp));
+  signUpTab.setAttribute('aria-selected', String(signingUp));
+  signInMount.hidden = signingUp;
+  signUpMount.hidden = !signingUp;
+
+  // Mounted on first view and then left alone.
+  if (signingUp && !mounted['sign-up']) {
+    auth.mountSignUp(signUpMount);
+    mounted['sign-up'] = true;
+  }
+  if (!signingUp && !mounted['sign-in']) {
+    auth.mountSignIn(signInMount);
+    mounted['sign-in'] = true;
+  }
+}
+
+signInTab.addEventListener('click', () => showAuthForm('sign-in'));
+signUpTab.addEventListener('click', () => showAuthForm('sign-up'));
+
+signOutButton.addEventListener('click', async () => {
+  stopConversation();
+  await auth.signOut();
+  // A full reload is the simplest way to be sure nothing from the previous
+  // account is left on screen or in memory.
+  window.location.reload();
+});
+
+/** Everything that needs a signed-in user. */
+async function startApp() {
+  authOverlay.hidden = true;
+  recognition = setUpRecognition();
+  setUpVoices();
+  updateControls();
+  await loadConversationOptions();
+  await startSession();
+}
+
+async function boot() {
+  const result = await auth.initAuth();
+
+  if (result.error) {
+    authOverlay.hidden = false;
+    authError.hidden = false;
+    authError.textContent = result.error;
+    return;
+  }
+
+  if (!result.enabled) {
+    // No sign-in configured: a single local user, as in development.
+    signOutButton.hidden = true;
+    await startApp();
+    return;
+  }
+
+  signOutButton.hidden = false;
+
+  // Signing in or out from Clerk's own form lands here.
+  auth.onAuthChange((signedIn) => {
+    if (signedIn && authOverlay.hidden === false) window.location.reload();
+  });
+
+  if (!result.signedIn) {
+    authOverlay.hidden = false;
+    showAuthForm('sign-in');
+    return;
+  }
+
+  await startApp();
+}
+
+boot();

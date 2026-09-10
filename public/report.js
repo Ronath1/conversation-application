@@ -5,6 +5,8 @@
  * permanent record: it never clears between turns or sessions.
  */
 
+import { apiFetch } from './api.js';
+
 const MISTAKE_LABEL = {
   grammar: 'Grammar',
   'verb-tense': 'Verb tense',
@@ -205,10 +207,7 @@ export async function load() {
   bodyEl.replaceChildren(element('p', 'empty', 'Loading…'));
   try {
     const query = activeType ? `?type=${encodeURIComponent(activeType)}` : '';
-    const response = await fetch(`/api/report${query}`);
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload?.error?.message || 'Could not load the report.');
-    render(payload);
+    render(await apiFetch(`/api/report${query}`));
   } catch (error) {
     bodyEl.replaceChildren(element('p', 'empty-note', error.message));
   }

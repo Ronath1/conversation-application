@@ -15,7 +15,25 @@
         <button id="tab-settings" class="tab" type="button" aria-selected="false">Settings</button>
       </nav>
       <button id="new-session" class="ghost" type="button">New session</button>
+      <button id="sign-out" class="ghost" type="button" hidden>Sign out</button>
     </header>
+
+    <div class="auth-overlay" id="auth-overlay" hidden>
+      <div class="auth-panel">
+        <h2>English Conversation Practice</h2>
+        <p class="auth-intro">
+          Practise speaking English with an AI partner. Create an account to keep your own
+          conversations, your own mistake report and your own API key.
+        </p>
+        <div class="auth-tabs" role="tablist">
+          <button id="tab-sign-in" class="tab" type="button" role="tab" aria-selected="true">Sign in</button>
+          <button id="tab-sign-up" class="tab" type="button" role="tab" aria-selected="false">Create account</button>
+        </div>
+        <div id="clerk-sign-in"></div>
+        <div id="clerk-sign-up" hidden></div>
+        <p class="auth-error" id="auth-error" hidden></p>
+      </div>
+    </div>
 
     <div class="session-bar" id="session-bar">
       <label class="picker">
