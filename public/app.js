@@ -13,6 +13,7 @@ import * as report from './report.js';
 import * as settings from './settings.js';
 import * as auth from './auth.js';
 import { apiFetch } from './api.js';
+import { avatar, shortName } from './avatar.js';
 
 const conversationEl = document.getElementById('conversation');
 const liveEl = document.getElementById('live');
@@ -24,7 +25,11 @@ const typedForm = document.getElementById('typed-form');
 const typedInput = document.getElementById('typed-input');
 const newSessionButton = document.getElementById('new-session');
 const autoSpeakInput = document.getElementById('auto-speak');
-const voiceSelect = document.getElementById('voice');
+const voiceButton = document.getElementById('voice-button');
+const voiceButtonFace = document.getElementById('voice-button-face');
+const voiceButtonLabel = document.getElementById('voice-button-label');
+const voiceModal = document.getElementById('voice-modal');
+const voiceGrid = document.getElementById('voice-grid');
 const repeatButton = document.getElementById('repeat');
 
 const topicSelect = document.getElementById('topic-select');
@@ -663,10 +668,6 @@ autoSpeakInput.addEventListener('change', () => {
   if (!state.autoSpeak) stopSpeaking();
 });
 
-voiceSelect.addEventListener('change', () => {
-  state.voiceURI = voiceSelect.value;
-  writeStored(STORAGE_KEYS.voice, state.voiceURI);
-});
 
 topicSelect.addEventListener('change', () => {
   writeStored(STORAGE_KEYS.topic, topicSelect.value);
@@ -740,11 +741,94 @@ document.getElementById('settings-refresh').addEventListener('click', () => sett
 
 /* ---------- voice setup ---------- */
 
+/** The voices this device offers, refreshed when the browser reports them. */
+let voices = [];
+
+function chooseVoice(voiceURI) {
+  state.voiceURI = voiceURI;
+  writeStored(STORAGE_KEYS.voice, voiceURI);
+  drawVoiceButton();
+  drawVoiceGrid();
+}
+
+function drawVoiceButton() {
+  const chosen = speech.findVoice(state.voiceURI);
+  voiceButtonLabel.textContent = chosen ? shortName(chosen.name) : 'Voices';
+  // A small face on the button says which voice is set without opening anything.
+  voiceButtonFace.replaceChildren(chosen ? avatar(chosen.name, 24) : document.createTextNode(''));
+  voiceButtonFace.hidden = !chosen;
+}
+
+/** One tile per voice: a drawn face, the short name, and the accent underneath. */
+function drawVoiceGrid() {
+  const tiles = [];
+
+  const makeTile = (voice) => {
+    const name = voice ? voice.name : 'Default voice';
+    const value = voice ? voice.voiceURI : '';
+
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'voice-tile';
+    tile.setAttribute('aria-pressed', String(state.voiceURI === value));
+    if (state.voiceURI === value) tile.classList.add('picked');
+
+    const face = document.createElement('span');
+    face.className = 'voice-face';
+    face.append(avatar(name, 84));
+
+    const label = document.createElement('span');
+    label.className = 'voice-name';
+    label.textContent = voice ? shortName(voice.name) : 'Default';
+
+    const detail = document.createElement('span');
+    detail.className = 'voice-detail';
+    detail.textContent = voice ? voice.lang : "Your browser's choice";
+
+    tile.append(face, label, detail);
+    tile.addEventListener('click', () => {
+      chooseVoice(value);
+      // Hearing it is the whole point, so the tile speaks when it is picked.
+      speech.speak(`Hello. I am ${voice ? shortName(voice.name) : 'the default voice'}.`, {
+        voice,
+        rate: RATE_BY_DIFFICULTY[state.difficulty] ?? 1,
+      });
+    });
+    return tile;
+  };
+
+  tiles.push(makeTile(null));
+  for (const voice of voices) tiles.push(makeTile(voice));
+  voiceGrid.replaceChildren(...tiles);
+}
+
+function openVoices() {
+  drawVoiceGrid();
+  voiceModal.hidden = false;
+  document.getElementById('voice-close').focus();
+}
+
+function closeVoices() {
+  voiceModal.hidden = true;
+  // Stop a sample mid-sentence rather than talking to a closed window.
+  if (!state.speaking) speech.stop();
+  voiceButton.focus();
+}
+
+voiceButton.addEventListener('click', openVoices);
+document.getElementById('voice-close').addEventListener('click', closeVoices);
+voiceModal.addEventListener('click', (event) => {
+  if (event.target === voiceModal) closeVoices();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !voiceModal.hidden) closeVoices();
+});
+
 function setUpVoices() {
   if (!speech.isSupported) {
     autoSpeakInput.checked = false;
     autoSpeakInput.disabled = true;
-    voiceSelect.disabled = true;
+    voiceButton.disabled = true;
     state.autoSpeak = false;
     // Said in the label, not the status line, so a later status update cannot hide it.
     document.getElementById('auto-speak-label').textContent = 'Speech not supported here';
@@ -755,16 +839,15 @@ function setUpVoices() {
   state.voiceURI = readStored(STORAGE_KEYS.voice, '');
   autoSpeakInput.checked = state.autoSpeak;
 
-  speech.onVoicesReady((voices) => {
-    const options = [new Option('Default voice', '')];
-    for (const voice of voices) {
-      options.push(new Option(`${voice.name} (${voice.lang})`, voice.voiceURI));
-    }
-    voiceSelect.replaceChildren(...options);
+  speech.onVoicesReady((ready) => {
+    voices = ready;
     // Keep the stored choice only while that voice still exists on this machine.
-    voiceSelect.value = speech.findVoice(state.voiceURI) ? state.voiceURI : '';
-    state.voiceURI = voiceSelect.value;
+    if (!speech.findVoice(state.voiceURI)) state.voiceURI = '';
+    drawVoiceButton();
+    if (!voiceModal.hidden) drawVoiceGrid();
   });
+
+  drawVoiceButton();
 }
 
 /* ---------- sign in ---------- */

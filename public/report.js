@@ -6,6 +6,8 @@
  */
 
 import { apiFetch } from './api.js';
+import { donut, heatmap, toSlices, fromKey } from './charts.js';
+import { calendar } from './calendar.js';
 
 const MISTAKE_LABEL = {
   grammar: 'Grammar',
@@ -21,7 +23,10 @@ const MISTAKE_LABEL = {
 
 const bodyEl = document.getElementById('report-body');
 
-let activeType = '';
+/** The log's filters. Kept here so a refresh does not throw them away. */
+const filter = { type: '', from: null, to: null };
+
+let calendarOpen = false;
 
 function label(type) {
   return MISTAKE_LABEL[type] || MISTAKE_LABEL.other;
@@ -31,6 +36,17 @@ function formatDate(iso) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDay(key) {
+  return fromKey(key).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/** What the date button says, so the current filter is readable without opening it. */
+function dateLabel() {
+  if (!filter.from) return 'By date';
+  if (!filter.to || filter.to === filter.from) return formatDay(filter.from);
+  return `${formatDay(filter.from)} – ${formatDay(filter.to)}`;
 }
 
 function element(tag, className, text) {
@@ -58,7 +74,13 @@ function renderTiles(totals) {
   return wrap;
 }
 
-/** Bar list of error types. The widest bar is the habit worth working on. */
+/**
+ * Error types as a ring beside a bar list.
+ *
+ * The ring answers "how much of my trouble is this one thing", the bars answer
+ * "which is worst and by how much". The bars double as the ring's legend, so
+ * the colours are never the only way to read it.
+ */
 function renderByType(byType) {
   const section = element('section', 'panel');
   section.append(element('h3', null, 'Common error types'));
@@ -68,44 +90,75 @@ function renderByType(byType) {
     return section;
   }
 
+  const slices = toSlices(byType, label);
   const max = byType[0].count;
+
+  const layout = element('div', 'type-split');
+  layout.append(donut(slices));
+
   const list = element('ul', 'bars');
+  const colorOf = new Map(slices.map((slice) => [slice.key, slice.color]));
+  const tailColor = colorOf.get('__other__');
 
   for (const row of byType) {
     const item = document.createElement('li');
     const head = element('div', 'bar-head');
-    head.append(element('span', null, label(row.type)), element('span', 'bar-count', String(row.count)));
+    const name = element('span', 'bar-name');
+    const swatch = element('i', 'swatch');
+    swatch.style.background = colorOf.get(row.type) || tailColor || 'var(--chart-empty)';
+    name.append(swatch, document.createTextNode(label(row.type)));
+    head.append(name, element('span', 'bar-count', String(row.count)));
+
     const track = element('div', 'bar-track');
     const fill = element('div', 'bar-fill');
     fill.style.width = `${Math.round((row.count / max) * 100)}%`;
+    fill.style.background = colorOf.get(row.type) || tailColor || 'var(--accent)';
     track.append(fill);
+
     item.append(head, track);
     list.append(item);
   }
 
-  section.append(list);
+  layout.append(list);
+  section.append(layout);
   return section;
 }
 
-function renderRecurring(recurring) {
+/** A square per day, so streaks and gaps show without reading any number. */
+function renderHeatmap(report) {
   const section = element('section', 'panel');
-  section.append(element('h3', null, 'Repeated mistakes'));
+  section.append(element('h3', null, 'Practice by day'));
 
-  if (recurring.length === 0) {
-    section.append(element('p', 'empty-note', 'Nothing repeated yet. A mistake appears here once you make it twice.'));
+  if (report.calendar.length === 0) {
+    section.append(element('p', 'empty-note', 'No practice days recorded yet.'));
     return section;
   }
 
-  const list = element('ul', 'recurring');
-  for (const row of recurring) {
-    const item = document.createElement('li');
-    const line = element('p', 'fix');
-    line.append(element('s', null, row.original), ' ', element('strong', null, row.corrected));
-    item.append(element('span', 'badge', label(row.type)), line, element('span', 'times', `${row.count} times`));
-    list.append(item);
-  }
+  const scroller = element('div', 'heatmap-scroll');
+  scroller.append(
+    heatmap(report.calendar, {
+      from: filter.from,
+      to: filter.to,
+      onPick: (day) => {
+        filter.from = day;
+        filter.to = null;
+        load();
+      },
+    }),
+  );
+  section.append(scroller);
 
-  section.append(list);
+  const key = element('div', 'heat-key');
+  key.append(element('span', 'hint', 'Fewer turns'));
+  for (const level of ['--chart-empty', '--heat-1', '--heat-2', '--heat-3', '--heat-4']) {
+    const box = element('i', 'heat-swatch');
+    box.style.background = `var(${level})`;
+    key.append(box);
+  }
+  key.append(element('span', 'hint', 'More'));
+  section.append(key);
+
+  section.append(element('p', 'hint', 'Click a day to see the mistakes you made on it.'));
   return section;
 }
 
@@ -135,26 +188,108 @@ function renderTrend(trend) {
   return section;
 }
 
-function renderLog(report, onFilterChange) {
+function renderRecurring(recurring) {
+  const section = element('section', 'panel');
+  section.append(element('h3', null, 'Repeated mistakes'));
+
+  if (recurring.length === 0) {
+    section.append(element('p', 'empty-note', 'Nothing repeated yet. A mistake appears here once you make it twice.'));
+    return section;
+  }
+
+  const list = element('ul', 'recurring');
+  for (const row of recurring) {
+    const item = document.createElement('li');
+    const line = element('p', 'fix');
+    line.append(element('s', null, row.original), ' ', element('strong', null, row.corrected));
+    item.append(element('span', 'badge', label(row.type)), line, element('span', 'times', `${row.count} times`));
+    list.append(item);
+  }
+
+  section.append(list);
+  return section;
+}
+
+/** The date button and the calendar that drops out of it. */
+function renderDatePicker(report) {
+  const wrap = element('div', 'date-picker');
+
+  const button = element('button', 'ghost date-button', dateLabel());
+  button.type = 'button';
+  button.setAttribute('aria-expanded', String(calendarOpen));
+  if (filter.from) button.classList.add('active');
+  button.addEventListener('click', () => {
+    calendarOpen = !calendarOpen;
+    render(report);
+  });
+  wrap.append(button);
+
+  if (filter.from) {
+    const clear = element('button', 'chip-clear', '×');
+    clear.type = 'button';
+    clear.title = 'Show every date';
+    clear.setAttribute('aria-label', 'Show every date');
+    clear.addEventListener('click', () => {
+      filter.from = null;
+      filter.to = null;
+      calendarOpen = false;
+      load();
+    });
+    wrap.append(clear);
+  }
+
+  if (calendarOpen) {
+    wrap.append(
+      calendar({
+        days: report.calendar,
+        from: filter.from,
+        to: filter.to,
+        onChange: (from, to) => {
+          filter.from = from;
+          filter.to = to;
+          // An unfinished range keeps the calendar open for the second click.
+          calendarOpen = Boolean(from) && !to;
+          load();
+        },
+      }),
+    );
+  }
+
+  return wrap;
+}
+
+function renderLog(report) {
   const section = element('section', 'panel');
 
   const head = element('div', 'panel-head');
   head.append(element('h3', null, 'Every mistake'));
 
-  const filter = document.createElement('select');
-  filter.setAttribute('aria-label', 'Filter by mistake type');
-  filter.append(new Option('All types', ''));
+  const controls = element('div', 'log-controls');
+
+  const types = document.createElement('select');
+  types.setAttribute('aria-label', 'Filter by mistake type');
+  types.append(new Option('All types', ''));
   for (const row of report.byType) {
-    filter.append(new Option(`${label(row.type)} (${row.count})`, row.type));
+    types.append(new Option(`${label(row.type)} (${row.count})`, row.type));
   }
-  filter.value = activeType;
-  filter.addEventListener('change', () => onFilterChange(filter.value));
-  head.append(filter);
+  types.value = filter.type;
+  types.addEventListener('change', () => {
+    filter.type = types.value;
+    load();
+  });
+
+  controls.append(types, renderDatePicker(report));
+  head.append(controls);
   section.append(head);
 
   if (report.mistakes.length === 0) {
+    const narrowed = filter.type || filter.from;
     section.append(
-      element('p', 'empty-note', activeType ? 'No mistakes of this type.' : 'No mistakes logged yet. Have a conversation first.'),
+      element(
+        'p',
+        'empty-note',
+        narrowed ? 'No mistakes match this filter.' : 'No mistakes logged yet. Have a conversation first.',
+      ),
     );
     return section;
   }
@@ -192,23 +327,43 @@ function render(report) {
   fragment.append(
     renderTiles(report.totals),
     renderByType(report.byType),
-    renderRecurring(report.recurring),
+    renderHeatmap(report),
     renderTrend(report.trend),
-    renderLog(report, (type) => {
-      activeType = type;
-      load();
-    }),
+    renderRecurring(report.recurring),
+    renderLog(report),
   );
   bodyEl.replaceChildren(fragment);
 }
 
 /** Fetches and draws the report. Safe to call whenever the screen is shown. */
 export async function load() {
-  bodyEl.replaceChildren(element('p', 'empty', 'Loading…'));
+  // Changing a filter must not throw away where you were reading. The screen
+  // stays put and dims, rather than collapsing to "Loading…" and jumping up.
+  const scroller = bodyEl.closest('.report') || document.scrollingElement;
+  const keepScroll = scroller.scrollTop;
+  const drawn = Boolean(bodyEl.querySelector('.panel'));
+
+  if (drawn) bodyEl.classList.add('busy');
+  else bodyEl.replaceChildren(element('p', 'empty', 'Loading…'));
+
+  const query = new URLSearchParams();
+  // Days are bucketed in this browser's zone, so an evening's practice counts
+  // on the evening it happened rather than the next UTC date.
+  query.set('tzOffset', String(new Date().getTimezoneOffset()));
+  if (filter.type) query.set('type', filter.type);
+  if (filter.from) {
+    query.set('from', filter.from);
+    // A single day is a range of one. Sending only "from" would ask the server
+    // for that day onwards, which is not what one click on a calendar means.
+    query.set('to', filter.to || filter.from);
+  }
+
   try {
-    const query = activeType ? `?type=${encodeURIComponent(activeType)}` : '';
-    render(await apiFetch(`/api/report${query}`));
+    render(await apiFetch(`/api/report?${query}`));
+    if (drawn) scroller.scrollTop = keepScroll;
   } catch (error) {
     bodyEl.replaceChildren(element('p', 'empty-note', error.message));
+  } finally {
+    bodyEl.classList.remove('busy');
   }
 }

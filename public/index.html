@@ -85,12 +85,10 @@
           <span id="auto-speak-label">Speak replies</span>
         </label>
 
-        <label class="voice">
-          <span class="sr-only">AI voice</span>
-          <select id="voice" aria-label="AI voice">
-            <option value="">Default voice</option>
-          </select>
-        </label>
+        <button id="voice-button" class="ghost voice-button" type="button" aria-haspopup="dialog">
+          <span class="voice-button-face" id="voice-button-face" aria-hidden="true"></span>
+          <span id="voice-button-label">Voices</span>
+        </button>
 
         <button id="repeat" class="ghost" type="button" disabled>Repeat that</button>
       </div>
@@ -112,6 +110,20 @@
         <button type="submit" class="ghost">Send</button>
       </form>
     </footer>
+
+    <div class="modal" id="voice-modal" hidden>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="voice-modal-title">
+        <div class="modal-head">
+          <h2 id="voice-modal-title">Voices</h2>
+          <button id="voice-close" class="ghost modal-close" type="button" aria-label="Close voices">&times;</button>
+        </div>
+        <p class="modal-note">
+          Pick who reads the replies to you. These are your device's own voices, so the list is
+          different on every computer and phone. The faces are drawn, not photographs.
+        </p>
+        <div class="voice-grid" id="voice-grid"></div>
+      </div>
+    </div>
 
     <script src="/app.js" type="module"></script>
   </body>

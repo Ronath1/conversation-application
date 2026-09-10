@@ -19,8 +19,21 @@ function normalize(text) {
     .trim();
 }
 
-function toDay(isoDate) {
-  return String(isoDate || '').slice(0, 10);
+/**
+ * The calendar day a timestamp fell on, in the reader's own zone.
+ *
+ * Slicing the ISO string would give the UTC day, which puts a late evening's
+ * practice on the following date for anyone east of London. The browser sends
+ * its offset so the days here are the days the person actually lived.
+ *
+ * @param {string} isoDate
+ * @param {number} offsetMinutes From Date.getTimezoneOffset(): UTC minus local.
+ */
+function toDay(isoDate, offsetMinutes = 0) {
+  if (!isoDate) return '';
+  const time = new Date(isoDate).getTime();
+  if (Number.isNaN(time)) return '';
+  return new Date(time - offsetMinutes * 60_000).toISOString().slice(0, 10);
 }
 
 /** Flattens sessions into one mistake list, newest first. */
@@ -84,32 +97,37 @@ function findRecurring(mistakes) {
 }
 
 /**
- * Mistakes per turn, by day. Mistake count alone rewards talking less, so the
- * rate is what shows whether the speaking is getting cleaner.
+ * Every day that has either a turn or a mistake on it, oldest first.
+ *
+ * The calendar and the heatmap both need the whole history, not a window, so
+ * this is built once and the trend is a slice of it. A day with turns and no
+ * mistakes is kept: a clean day is a result, not an absence of data.
  */
-function buildTrend(sessions, mistakes) {
+function buildDays(sessions, mistakes, offsetMinutes) {
   const days = new Map();
+
+  const entryFor = (day) => {
+    const existing = days.get(day);
+    if (existing) return existing;
+    const created = { date: day, turns: 0, mistakes: 0 };
+    days.set(day, created);
+    return created;
+  };
 
   for (const session of sessions) {
     for (const turn of session.turns || []) {
-      const day = toDay(turn.at);
-      if (!day) continue;
-      const entry = days.get(day) || { date: day, turns: 0, mistakes: 0 };
-      entry.turns += 1;
-      days.set(day, entry);
+      const day = toDay(turn.at, offsetMinutes);
+      if (day) entryFor(day).turns += 1;
     }
   }
 
   for (const mistake of mistakes) {
-    const day = toDay(mistake.at);
-    const entry = days.get(day) || { date: day, turns: 0, mistakes: 0 };
-    entry.mistakes += 1;
-    days.set(day, entry);
+    const day = toDay(mistake.at, offsetMinutes);
+    if (day) entryFor(day).mistakes += 1;
   }
 
   return [...days.values()]
     .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(-TREND_DAYS)
     .map((entry) => ({
       ...entry,
       mistakesPerTurn: entry.turns ? Number((entry.mistakes / entry.turns).toFixed(2)) : 0,
@@ -120,19 +138,27 @@ function buildTrend(sessions, mistakes) {
  * @param {object} [filter]
  * @param {string} [filter.type] Limit the log to one mistake type.
  * @param {string} [filter.sessionId] Limit the log to one session.
+ * @param {string} [filter.from] Earliest day to show, as YYYY-MM-DD.
+ * @param {string} [filter.to] Latest day to show, as YYYY-MM-DD. Inclusive.
+ * @param {number} [filter.offsetMinutes] The reader's Date.getTimezoneOffset().
  * @param {number} [filter.limit] Log entries returned. Totals ignore it.
  */
-export async function buildReport(userId, { type, sessionId, limit = 200 } = {}) {
+export async function buildReport(userId, { type, sessionId, from, to, offsetMinutes = 0, limit = 200 } = {}) {
   const sessions = await readAllSessions(userId);
   const mistakes = collectMistakes(sessions);
 
   const turnCount = sessions.reduce((total, session) => total + (session.turns?.length || 0), 0);
+  const days = buildDays(sessions, mistakes, offsetMinutes);
 
   // Filters narrow the log only. The totals always describe everything stored,
   // so a filtered view cannot be mistaken for the whole picture.
   let log = mistakes;
   if (type) log = log.filter((mistake) => mistake.type === type);
   if (sessionId) log = log.filter((mistake) => mistake.sessionId === sessionId);
+  // The same day boundary the calendar was built with, so clicking a day shows
+  // exactly the mistakes that day's square counted.
+  if (from) log = log.filter((mistake) => toDay(mistake.at, offsetMinutes) >= from);
+  if (to) log = log.filter((mistake) => toDay(mistake.at, offsetMinutes) <= to);
 
   return {
     totals: {
@@ -144,7 +170,8 @@ export async function buildReport(userId, { type, sessionId, limit = 200 } = {})
     },
     byType: countByType(mistakes),
     recurring: findRecurring(mistakes).slice(0, 20),
-    trend: buildTrend(sessions, mistakes),
+    trend: days.slice(-TREND_DAYS),
+    calendar: days,
     sessions: sessions.map((session) => ({
       id: session.id,
       createdAt: session.createdAt,
@@ -152,7 +179,13 @@ export async function buildReport(userId, { type, sessionId, limit = 200 } = {})
       turnCount: session.turns?.length || 0,
       mistakeCount: (session.turns || []).reduce((total, turn) => total + (turn.corrections?.length || 0), 0),
     })),
-    filtered: { type: type || null, sessionId: sessionId || null, count: log.length },
+    filtered: {
+      type: type || null,
+      sessionId: sessionId || null,
+      from: from || null,
+      to: to || null,
+      count: log.length,
+    },
     mistakes: log.slice(0, limit),
   };
 }

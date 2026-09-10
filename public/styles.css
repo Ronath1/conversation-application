@@ -15,6 +15,24 @@
   --fix-accent: #b45309;
   --fix-badge: #fef3c7;
   --fix-ink: #15803d;
+
+  /* Chart palette. Validated for colourblind separation against a white panel;
+     three of these fall below 3:1 contrast, which is why every chart here also
+     writes its values out in text. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+
+  /* One hue, light to dark, for "how much practice on this day". */
+  --chart-empty: #eceef1;
+  --chart-other: #9aa1ab;
+  --heat-1: #cde2fb;
+  --heat-2: #86b6ef;
+  --heat-3: #3987e5;
+  --heat-4: #1c5cab;
 }
 
 * {
@@ -918,4 +936,419 @@ a.get-key-button:hover {
 
 .model-warning p {
   margin: 0;
+}
+
+
+/* A refetch dims what is already on screen instead of replacing it. */
+#report-body.busy {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* ---------- charts ---------- */
+
+.type-split {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+}
+
+.donut {
+  width: 180px;
+  height: 180px;
+  flex: none;
+}
+
+.donut-total {
+  font-size: 30px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+
+.donut-caption {
+  font-size: 12px;
+  fill: var(--muted);
+}
+
+.type-split .bars {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.bar-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.heatmap-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+/* Its own natural width, so the squares stay square and the strip scrolls on
+   a narrow screen rather than stretching to fit. */
+.heatmap {
+  display: block;
+  flex: none;
+}
+
+.heat-label {
+  font-size: 9px;
+  fill: var(--muted);
+}
+
+.heat-cell.clickable {
+  cursor: pointer;
+}
+
+.heat-cell.clickable:hover {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.heat-cell.picked {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.heat-key {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.heat-key .hint {
+  margin: 0;
+}
+
+.heat-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+/* ---------- date filter ---------- */
+
+.log-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.date-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.date-button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chip-clear {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chip-clear:hover {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.calendar {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: 268px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+}
+
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.calendar-month {
+  font-weight: 600;
+}
+
+.calendar-step {
+  padding: 2px 10px;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  padding-bottom: 4px;
+}
+
+.calendar-blank {
+  height: 32px;
+}
+
+.calendar-day {
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  position: relative;
+}
+
+.calendar-day:disabled {
+  color: #c3c7cd;
+  cursor: default;
+}
+
+/* A dot marks a day you practised, so the shape of the month is readable
+   before anything is clicked. */
+.calendar-day.has-mistakes::after,
+.calendar-day.clean::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.calendar-day.has-mistakes::after {
+  background: var(--series-2);
+}
+
+.calendar-day.clean::after {
+  background: var(--fix-ink);
+}
+
+.calendar-day:not(:disabled):hover {
+  background: var(--ai);
+}
+
+.calendar-day.picked {
+  background: #dbeafe;
+}
+
+.calendar-day.edge {
+  background: var(--accent);
+  color: var(--user-ink);
+}
+
+.calendar-day.edge::after {
+  background: #ffffff;
+}
+
+.calendar-day.pending {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+.calendar-hint {
+  margin: 10px 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.calendar-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.calendar-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.calendar-legend .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.calendar-legend .dot.has-mistakes {
+  background: var(--series-2);
+}
+
+.calendar-legend .dot.clean {
+  background: var(--fix-ink);
+}
+
+/* On a phone the button sits mid-row, so a popover anchored to it hangs off
+   the screen. There it drops below the whole header instead. */
+@media (max-width: 560px) {
+  .panel-head {
+    position: relative;
+  }
+
+  .date-picker {
+    position: static;
+  }
+
+  .calendar {
+    left: 0;
+    right: 0;
+    width: auto;
+  }
+}
+
+/* ---------- voices ---------- */
+
+.voice-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-button-face {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.voice-button-face .avatar {
+  border-radius: 50%;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.modal-panel {
+  width: min(680px, 100%);
+  max-height: 82vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 20px 22px 24px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.modal-close {
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 10px;
+}
+
+.modal-note {
+  margin: 6px 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.voice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 12px;
+}
+
+.voice-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.12s;
+}
+
+.voice-tile:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.voice-tile.picked {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.voice-face {
+  line-height: 0;
+}
+
+.voice-face .avatar {
+  border-radius: 50%;
+  display: block;
+}
+
+.voice-name {
+  font-weight: 600;
+  font-size: 14px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.voice-detail {
+  font-size: 11px;
+  color: var(--muted);
 }
