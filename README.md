@@ -62,7 +62,7 @@ Open <http://localhost:3000> in Chrome, tap the mic, allow microphone access, an
 
 The microphone needs `localhost` or HTTPS. A LAN address such as `http://192.168.1.5:3000` will not get microphone permission.
 
-You can skip `.env` entirely and paste the key into the Settings screen instead. Either way it ends up in `data/config.json`, which is gitignored.
+You can skip `.env` entirely and paste the key into the Settings screen instead. Either way it ends up in `data/config/app.json`, which is gitignored.
 
 ## Configuration
 
@@ -75,7 +75,7 @@ You can skip `.env` entirely and paste the key into the Settings screen instead.
 | `PORT` | Defaults to `3000`. |
 | `DATABASE_URL` | A Postgres connection string. When set, everything is stored in Postgres instead of on disk. Leave it unset for local development. |
 
-Environment variables only seed the store on first boot. After that `data/config.json` is the source of truth, so a key changed in Settings is not overwritten on the next restart.
+Environment variables only seed the store on first boot. After that the stored config is the source of truth, so a key changed in Settings is not overwritten on the next restart.
 
 ## How it is built
 
@@ -109,8 +109,11 @@ Providers do not report live quota, so the app counts its own requests per day a
 ## Project layout
 
 ```
+api/index.js              Serverless entry point (Vercel)
 src/
-  server.js               Express app, static files, error handling
+  app.js                  Express app, static files, error handling
+  server.js               Listens on a port, for local use
+  lib/store.js            Document storage: files or Postgres
   providers/
     index.js              Registry and getAiReply(); the adapter contract
     gemini.js             Gemini adapter (REST via fetch)
@@ -120,7 +123,7 @@ src/
     service.js            One turn: history, provider call, storage
     prompt.js             System prompt, topics, difficulty, reply schema
     parseReply.js         Parses the structured reply, never fatally
-    sessionStore.js       Session files and the per-session write queue
+    sessionStore.js       Sessions and the per-session write queue
     vocabulary.js         New-word extraction for the summary
   report/reportService.js Mistake report aggregation
   usage/usageStore.js     Daily request counts
