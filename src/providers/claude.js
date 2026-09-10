@@ -197,6 +197,7 @@ const claudeAdapter = {
   /** No free tier, so the app shows a plain request count instead of a limit. */
   freeTierDailyRequests: null,
   envVar: 'ANTHROPIC_API_KEY',
+  keyUrl: 'https://console.anthropic.com/settings/keys',
   keyHint: 'Anthropic Console key (starts with sk-ant-). Usage is paid, with no free daily allowance.',
   generateReply,
   validateKey,

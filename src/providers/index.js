@@ -9,6 +9,7 @@
  *   freeTierDailyRequests  number   for the app-side usage estimate
  *   envVar                 string   env var that seeds the key on first boot
  *   keyHint                string   help text for the settings panel
+ *   keyUrl                 string   where a user gets a key of their own
  *   generateReply(params)  -> { text, model, finishReason, usage }
  *   validateKey(apiKey)    -> { valid, reason?, warning? }
  *
@@ -51,13 +52,13 @@ export function getAdapter(providerId) {
 }
 
 /** Resolves the adapter, its stored key and its model in one step. */
-export async function resolveProvider(providerId) {
-  const id = providerId || (await keyStore.getActiveProviderId());
+export async function resolveProvider(userId, providerId) {
+  const id = providerId || (await keyStore.getActiveProviderId(userId));
   const adapter = getAdapter(id);
-  const stored = await keyStore.getProviderConfig(id);
+  const stored = await keyStore.getProviderConfig(userId, id);
   return {
     adapter,
-    apiKey: stored?.apiKey || null,
+    apiKey: await keyStore.getApiKey(userId, id),
     model: stored?.model || adapter.defaultModel,
   };
 }
@@ -68,12 +69,13 @@ export async function resolveProvider(providerId) {
  *
  * @param {object} params
  * @param {Array<{role: 'user'|'assistant', content: string}>} params.messages
+ * @param {string} params.userId Whose key and settings to use.
  * @param {string} [params.provider] Defaults to the active provider.
  * @param {string} [params.systemPrompt]
  * @returns {Promise<{provider: string, model: string, text: string, usage: object, finishReason: string|null}>}
  */
-export async function getAiReply({ provider, messages, systemPrompt, ...options } = {}) {
-  const { adapter, apiKey, model } = await resolveProvider(provider);
+export async function getAiReply({ userId, provider, messages, systemPrompt, ...options } = {}) {
+  const { adapter, apiKey, model } = await resolveProvider(userId, provider);
 
   if (!apiKey) {
     throw new ProviderError(ErrorCode.MISSING_KEY, undefined, { provider: adapter.id });
@@ -89,10 +91,10 @@ export async function getAiReply({ provider, messages, systemPrompt, ...options 
       model: options.model || model,
       ...options,
     });
-    await usageStore.recordRequest(adapter.id, { ok: true });
+    await usageStore.recordRequest(userId, adapter.id, { ok: true });
     return { provider: adapter.id, ...result };
   } catch (error) {
-    await usageStore.recordRequest(adapter.id, { ok: false, code: error.code });
+    await usageStore.recordRequest(userId, adapter.id, { ok: false, code: error.code });
     throw error;
   }
 }

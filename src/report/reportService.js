@@ -122,8 +122,8 @@ function buildTrend(sessions, mistakes) {
  * @param {string} [filter.sessionId] Limit the log to one session.
  * @param {number} [filter.limit] Log entries returned. Totals ignore it.
  */
-export async function buildReport({ type, sessionId, limit = 200 } = {}) {
-  const sessions = await readAllSessions();
+export async function buildReport(userId, { type, sessionId, limit = 200 } = {}) {
+  const sessions = await readAllSessions(userId);
   const mistakes = collectMistakes(sessions);
 
   const turnCount = sessions.reduce((total, session) => total + (session.turns?.length || 0), 0);

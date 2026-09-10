@@ -8,6 +8,7 @@
 
 import { Router } from 'express';
 import { getAiReply } from '../providers/index.js';
+import { userIdOf } from '../middleware/clerkAuth.js';
 
 const router = Router();
 
@@ -24,6 +25,7 @@ router.post(
       : DEFAULT_MESSAGE;
 
     const reply = await getAiReply({
+      userId: userIdOf(req),
       provider: req.body?.provider,
       messages: [{ role: 'user', content: message }],
       systemPrompt: 'You are a friendly English conversation partner. Keep replies short.',

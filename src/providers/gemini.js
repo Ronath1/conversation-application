@@ -234,6 +234,7 @@ const geminiAdapter = {
   /** Free-tier requests per day, used later by the app-side usage estimate. */
   freeTierDailyRequests: 200,
   envVar: 'GEMINI_API_KEY',
+  keyUrl: 'https://ai.google.dev/gemini-api/docs/api-key',
   keyHint: 'Google AI Studio key (starts with AIza). A Gemini consumer subscription does not grant API access.',
   generateReply,
   validateKey,

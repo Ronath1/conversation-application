@@ -14,7 +14,8 @@ const COLLECTION = 'usage';
 /** Days of history kept. Enough for a weekly look back, small to store. */
 const RETAIN_DAYS = 30;
 
-let writeChain = Promise.resolve();
+/** One write chain per user. */
+const writeChains = new Map();
 
 /** Local calendar date, because a daily quota resets on the provider's clock, not UTC. */
 export function today() {
@@ -32,8 +33,8 @@ function emptyDay() {
  * request may run in a different process, and a stale count would overwrite a
  * newer one.
  */
-async function readProvider(providerId) {
-  const stored = await readDoc(COLLECTION, providerId);
+async function readProvider(userId, providerId) {
+  const stored = await readDoc(userId, COLLECTION, providerId);
   return stored && typeof stored.days === 'object' ? stored : { days: {} };
 }
 
@@ -59,10 +60,11 @@ function prune(days) {
  * @param {boolean} [outcome.ok]
  * @param {string} [outcome.code] Error code, when the request failed.
  */
-export async function recordRequest(providerId, { ok = true, code } = {}) {
+export async function recordRequest(userId, providerId, { ok = true, code } = {}) {
   // Queued so two turns finishing together cannot both write the same count.
-  writeChain = writeChain.catch(() => {}).then(async () => {
-    const usage = await readProvider(providerId);
+  const previous = writeChains.get(userId) || Promise.resolve();
+  const next = previous.catch(() => {}).then(async () => {
+    const usage = await readProvider(userId, providerId);
     const day = (usage.days[today()] ||= emptyDay());
 
     day.requests += 1;
@@ -71,21 +73,22 @@ export async function recordRequest(providerId, { ok = true, code } = {}) {
     day.lastAt = new Date().toISOString();
 
     prune(usage.days);
-    await writeDoc(COLLECTION, providerId, usage);
+    await writeDoc(userId, COLLECTION, providerId, usage);
     return day;
   });
 
-  return writeChain;
+  writeChains.set(userId, next);
+  return next;
 }
 
-export async function getDay(providerId, date = today()) {
-  const usage = await readProvider(providerId);
+export async function getDay(userId, providerId, date = today()) {
+  const usage = await readProvider(userId, providerId);
   return { ...emptyDay(), ...(usage.days[date] || {}) };
 }
 
 /** Recent days, oldest first, for a small history in the settings panel. */
-export async function getRecentDays(providerId, dayCount = 7) {
-  const usage = await readProvider(providerId);
+export async function getRecentDays(userId, providerId, dayCount = 7) {
+  const usage = await readProvider(userId, providerId);
   const now = new Date();
   const out = [];
 

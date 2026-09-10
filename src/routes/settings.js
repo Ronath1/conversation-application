@@ -1,14 +1,18 @@
 /**
- * Settings endpoints: read provider state, swap the API key at runtime.
+ * Settings endpoints: read the signed-in user's provider state, swap their
+ * API key at runtime.
  *
  * A stored key is never sent back. Responses carry a masked form only, which
- * is enough to tell two keys apart and useless for making requests.
+ * is enough to tell two keys apart and useless for making requests. Every
+ * value here belongs to one account and is addressed by that account's id, so
+ * one user cannot read or change another's key.
  */
 
 import { Router } from 'express';
 import * as keyStore from '../config/keyStore.js';
 import { getAdapter, hasAdapter, listAdapters } from '../providers/index.js';
 import { ErrorCode, ProviderError } from '../providers/errors.js';
+import { userIdOf } from '../middleware/clerkAuth.js';
 
 const router = Router();
 
@@ -18,27 +22,30 @@ const MAX_KEY_LENGTH = 500;
 /** Express 4 does not catch rejected promises from handlers. */
 const asyncHandler = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
-async function describeProvider(adapter, activeProviderId) {
-  const stored = await keyStore.getProviderConfig(adapter.id);
+async function describeProvider(userId, adapter, activeProviderId) {
+  const stored = await keyStore.getProviderConfig(userId, adapter.id);
   return {
     id: adapter.id,
     label: adapter.label,
     active: adapter.id === activeProviderId,
     model: stored?.model || adapter.defaultModel,
     defaultModel: adapter.defaultModel,
-    hasKey: Boolean(stored?.apiKey),
-    maskedKey: keyStore.maskKey(stored?.apiKey),
-    keySource: stored?.apiKey ? stored.source || 'settings' : null,
+    hasKey: Boolean(stored?.hasKey),
+    maskedKey: await keyStore.getMaskedKey(userId, adapter.id),
+    keySource: stored?.hasKey ? stored.source || 'settings' : null,
     keyUpdatedAt: stored?.updatedAt || null,
     freeTierDailyRequests: adapter.freeTierDailyRequests,
     keyHint: adapter.keyHint,
+    keyUrl: adapter.keyUrl,
     envVar: adapter.envVar,
   };
 }
 
-async function buildSettings() {
-  const activeProviderId = await keyStore.getActiveProviderId();
-  const providers = await Promise.all(listAdapters().map((adapter) => describeProvider(adapter, activeProviderId)));
+async function buildSettings(userId) {
+  const activeProviderId = await keyStore.getActiveProviderId(userId);
+  const providers = await Promise.all(
+    listAdapters().map((adapter) => describeProvider(userId, adapter, activeProviderId)),
+  );
   return { activeProvider: activeProviderId, providers };
 }
 
@@ -46,7 +53,7 @@ async function buildSettings() {
 router.get(
   '/settings',
   asyncHandler(async (req, res) => {
-    res.json(await buildSettings());
+    res.json(await buildSettings(userIdOf(req)));
   }),
 );
 
@@ -61,7 +68,8 @@ router.get(
 router.put(
   '/settings/key',
   asyncHandler(async (req, res) => {
-    const providerId = req.body?.provider || (await keyStore.getActiveProviderId());
+    const userId = userIdOf(req);
+    const providerId = req.body?.provider || (await keyStore.getActiveProviderId(userId));
     const adapter = getAdapter(providerId);
 
     const rawKey = req.body?.apiKey;
@@ -90,13 +98,13 @@ router.put(
       }
     }
 
-    await keyStore.setApiKey(providerId, apiKey);
+    await keyStore.setApiKey(userId, providerId, apiKey);
 
     res.json({
       ok: true,
       validated: shouldValidate,
       warning: validation?.warning || null,
-      provider: await describeProvider(adapter, await keyStore.getActiveProviderId()),
+      provider: await describeProvider(userId, adapter, await keyStore.getActiveProviderId(userId)),
     });
   }),
 );
@@ -105,12 +113,13 @@ router.put(
 router.delete(
   '/settings/key/:provider',
   asyncHandler(async (req, res) => {
+    const userId = userIdOf(req);
     const adapter = getAdapter(req.params.provider);
-    const removed = await keyStore.clearApiKey(adapter.id);
+    const removed = await keyStore.clearApiKey(userId, adapter.id);
     res.json({
       ok: true,
       removed,
-      provider: await describeProvider(adapter, await keyStore.getActiveProviderId()),
+      provider: await describeProvider(userId, adapter, await keyStore.getActiveProviderId(userId)),
     });
   }),
 );
@@ -119,12 +128,13 @@ router.delete(
 router.put(
   '/settings/provider',
   asyncHandler(async (req, res) => {
+    const userId = userIdOf(req);
     const providerId = req.body?.provider;
     if (!hasAdapter(providerId)) {
       throw new ProviderError(ErrorCode.UNKNOWN_PROVIDER, `Unknown provider "${providerId}".`, { status: 404 });
     }
-    await keyStore.setActiveProviderId(providerId);
-    res.json(await buildSettings());
+    await keyStore.setActiveProviderId(userId, providerId);
+    res.json(await buildSettings(userId));
   }),
 );
 
@@ -132,14 +142,15 @@ router.put(
 router.put(
   '/settings/model',
   asyncHandler(async (req, res) => {
-    const providerId = req.body?.provider || (await keyStore.getActiveProviderId());
+    const userId = userIdOf(req);
+    const providerId = req.body?.provider || (await keyStore.getActiveProviderId(userId));
     const adapter = getAdapter(providerId);
     const model = req.body?.model;
     if (typeof model !== 'string' || !model.trim()) {
       throw new ProviderError(ErrorCode.BAD_REQUEST, 'model is required.', { provider: providerId, status: 400 });
     }
-    await keyStore.setProviderModel(providerId, model.trim());
-    res.json({ ok: true, provider: await describeProvider(adapter, await keyStore.getActiveProviderId()) });
+    await keyStore.setProviderModel(userId, providerId, model.trim());
+    res.json({ ok: true, provider: await describeProvider(userId, adapter, await keyStore.getActiveProviderId(userId)) });
   }),
 );
 

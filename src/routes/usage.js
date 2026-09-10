@@ -9,6 +9,7 @@ import { Router } from 'express';
 import * as usageStore from '../usage/usageStore.js';
 import * as keyStore from '../config/keyStore.js';
 import { getAdapter } from '../providers/index.js';
+import { userIdOf } from '../middleware/clerkAuth.js';
 
 const router = Router();
 
@@ -18,10 +19,11 @@ const asyncHandler = (handler) => (req, res, next) => Promise.resolve(handler(re
 router.get(
   '/usage',
   asyncHandler(async (req, res) => {
-    const providerId = req.query.provider || (await keyStore.getActiveProviderId());
+    const userId = userIdOf(req);
+    const providerId = req.query.provider || (await keyStore.getActiveProviderId(userId));
     const adapter = getAdapter(providerId);
 
-    const day = await usageStore.getDay(providerId);
+    const day = await usageStore.getDay(userId, providerId);
     const limit = adapter.freeTierDailyRequests || null;
 
     res.json({
@@ -37,7 +39,7 @@ router.get(
       exhausted: day.rateLimited > 0,
       estimate: true,
       note: 'Counted by this app. Providers do not report live quota, and requests made outside this app are not included.',
-      recentDays: await usageStore.getRecentDays(providerId, 7),
+      recentDays: await usageStore.getRecentDays(userId, providerId, 7),
     });
   }),
 );

@@ -57,12 +57,13 @@ export function validateDifficulty(difficulty) {
 /**
  * Runs one turn against the active provider and stores the result.
  *
+ * @param {string} userId
  * @param {string} sessionId
  * @param {string} text What the user said, as transcribed.
  * @returns {Promise<{turn: object, reply: string, corrections: Array, session: object}>}
  */
-export async function takeTurn(sessionId, text) {
-  const session = await sessionStore.getSession(sessionId);
+export async function takeTurn(userId, sessionId, text) {
+  const session = await sessionStore.getSession(userId, sessionId);
   if (!session) {
     throw new ProviderError(ErrorCode.BAD_REQUEST, 'Session not found.', { status: 404 });
   }
@@ -81,6 +82,7 @@ export async function takeTurn(sessionId, text) {
   }
 
   const result = await getAiReply({
+    userId,
     provider: session.provider || undefined,
     messages: toMessages(session, userText),
     systemPrompt: buildSystemPrompt(session),
@@ -100,7 +102,7 @@ export async function takeTurn(sessionId, text) {
     });
   }
 
-  const appended = await sessionStore.appendTurn(sessionId, {
+  const appended = await sessionStore.appendTurn(userId, sessionId, {
     user: userText,
     reply,
     corrections,

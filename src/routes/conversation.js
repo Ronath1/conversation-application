@@ -8,6 +8,7 @@ import { summarize, takeTurn, validateDifficulty, validateTopic } from '../conve
 import { DIFFICULTIES, TOPICS } from '../conversation/prompt.js';
 import { ErrorCode, ProviderError } from '../providers/errors.js';
 import { hasAdapter } from '../providers/index.js';
+import { userIdOf } from '../middleware/clerkAuth.js';
 
 const router = Router();
 
@@ -20,8 +21,8 @@ function requireSessionId(sessionId) {
   return sessionId;
 }
 
-async function loadSession(sessionId) {
-  const session = await sessionStore.getSession(requireSessionId(sessionId));
+async function loadSession(userId, sessionId) {
+  const session = await sessionStore.getSession(userId, requireSessionId(sessionId));
   if (!session) {
     throw new ProviderError(ErrorCode.BAD_REQUEST, 'Session not found.', { status: 404 });
   }
@@ -48,7 +49,7 @@ router.post(
       throw new ProviderError(ErrorCode.UNKNOWN_PROVIDER, `Unknown provider "${provider}".`, { status: 404 });
     }
 
-    const session = await sessionStore.createSession({ topic, difficulty, provider });
+    const session = await sessionStore.createSession(userIdOf(req), { topic, difficulty, provider });
     res.status(201).json(session);
   }),
 );
@@ -57,7 +58,7 @@ router.post(
 router.get(
   '/sessions',
   asyncHandler(async (req, res) => {
-    res.json({ sessions: await sessionStore.listSessions() });
+    res.json({ sessions: await sessionStore.listSessions(userIdOf(req)) });
   }),
 );
 
@@ -65,7 +66,7 @@ router.get(
 router.get(
   '/sessions/:id',
   asyncHandler(async (req, res) => {
-    res.json(await loadSession(req.params.id));
+    res.json(await loadSession(userIdOf(req), req.params.id));
   }),
 );
 
@@ -78,7 +79,7 @@ router.post(
   '/sessions/:id/turns',
   asyncHandler(async (req, res) => {
     const sessionId = requireSessionId(req.params.id);
-    const result = await takeTurn(sessionId, req.body?.text);
+    const result = await takeTurn(userIdOf(req), sessionId, req.body?.text);
     res.json(result);
   }),
 );
@@ -87,12 +88,13 @@ router.post(
 router.patch(
   '/sessions/:id',
   asyncHandler(async (req, res) => {
-    const session = await loadSession(req.params.id);
+    const userId = userIdOf(req);
+    const session = await loadSession(userId, req.params.id);
     const patch = {};
     if (req.body?.topic !== undefined) patch.topic = validateTopic(req.body.topic);
     if (req.body?.difficulty !== undefined) patch.difficulty = validateDifficulty(req.body.difficulty);
     if (Object.keys(patch).length === 0) return res.json(session);
-    res.json(await sessionStore.updateSession(session.id, patch));
+    res.json(await sessionStore.updateSession(userId, session.id, patch));
   }),
 );
 
@@ -100,8 +102,9 @@ router.patch(
 router.post(
   '/sessions/:id/end',
   asyncHandler(async (req, res) => {
-    await loadSession(req.params.id);
-    const session = await sessionStore.endSession(req.params.id);
+    const userId = userIdOf(req);
+    await loadSession(userId, req.params.id);
+    const session = await sessionStore.endSession(userId, req.params.id);
     res.json({ ok: true, summary: summarize(session) });
   }),
 );
@@ -110,7 +113,7 @@ router.post(
 router.get(
   '/sessions/:id/summary',
   asyncHandler(async (req, res) => {
-    res.json(summarize(await loadSession(req.params.id)));
+    res.json(summarize(await loadSession(userIdOf(req), req.params.id)));
   }),
 );
 
@@ -118,7 +121,7 @@ router.get(
 router.delete(
   '/sessions/:id',
   asyncHandler(async (req, res) => {
-    const deleted = await sessionStore.deleteSession(requireSessionId(req.params.id));
+    const deleted = await sessionStore.deleteSession(userIdOf(req), requireSessionId(req.params.id));
     res.json({ ok: true, deleted });
   }),
 );

@@ -11,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import * as keyStore from './config/keyStore.js';
-import { requirePassword } from './middleware/auth.js';
+import { authConfig, requireUser } from './middleware/clerkAuth.js';
 import { isProviderError } from './providers/errors.js';
 import settingsRoutes from './routes/settings.js';
 import aiRoutes from './routes/ai.js';
@@ -24,24 +24,37 @@ const PUBLIC_DIR = path.resolve(fileURLToPath(new URL('../public', import.meta.u
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 
-// In front of everything, including the page itself, so an unlocked app never
-// serves the screen that holds the key field.
-app.use(requirePassword);
+/**
+ * The only endpoint that answers before sign-in. The page needs the
+ * publishable key to render the sign-in form at all, and that key is designed
+ * to be public.
+ */
+app.get('/api/auth/config', (req, res) => {
+  res.json(authConfig());
+});
 
-// The frontend is plain files: same origin, same port, no build step and no proxy.
+// The frontend is plain files: same origin, same port, no build step and no
+// proxy. Serving the page itself needs no session; every route below does, and
+// the page shows nothing but a sign-in form until it has one.
 app.use(express.static(PUBLIC_DIR));
 
-app.get('/api/health', async (req, res) => {
-  const activeProvider = await keyStore.getActiveProviderId();
-  const hasKey = Boolean(await keyStore.getApiKey(activeProvider));
-  res.json({ ok: true, activeProvider, hasKey });
+// Everything past this point belongs to one account.
+app.use('/api', requireUser);
+
+// Wrapped like every other route: an async handler that rejects without this
+// takes the whole process down rather than returning an error.
+app.get('/api/health', (req, res, next) => {
+  (async () => {
+    const activeProvider = await keyStore.getActiveProviderId(req.userId);
+    const hasKey = Boolean(await keyStore.getApiKey(req.userId, activeProvider));
+    res.json({ ok: true, userId: req.userId, activeProvider, hasKey });
+  })().catch(next);
 });
 
 app.use('/api', settingsRoutes);
 app.use('/api', aiRoutes);
 app.use('/api', conversationRoutes);
 app.use('/api', reportRoutes);
-
 app.use('/api', usageRoutes);
 
 app.use((req, res) => {

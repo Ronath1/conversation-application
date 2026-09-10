@@ -6,6 +6,7 @@ import { Router } from 'express';
 import { buildReport } from '../report/reportService.js';
 import { MISTAKE_TYPES } from '../conversation/prompt.js';
 import { ErrorCode, ProviderError } from '../providers/errors.js';
+import { userIdOf } from '../middleware/clerkAuth.js';
 
 const router = Router();
 
@@ -27,7 +28,7 @@ router.get(
     }
 
     const limit = Math.min(Number(req.query.limit) || 200, MAX_LIMIT);
-    res.json(await buildReport({ type, sessionId, limit }));
+    res.json(await buildReport(userIdOf(req), { type, sessionId, limit }));
   }),
 );
 

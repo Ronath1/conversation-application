@@ -35,8 +35,8 @@ function assertValid(sessionId) {
   if (!isValidSessionId(sessionId)) throw new Error(`Invalid session id: ${sessionId}`);
 }
 
-function persist(session) {
-  return writeDoc(COLLECTION, session.id, session);
+function persist(userId, session) {
+  return writeDoc(userId, COLLECTION, session.id, session);
 }
 
 /**
@@ -47,23 +47,24 @@ function persist(session) {
  * @param {(session: object) => any} mutator Returns a value passed back to the
  *   caller. Returning undefined means "no change"; nothing is written.
  */
-function mutate(sessionId, mutator) {
-  const previous = writeChains.get(sessionId) || Promise.resolve();
+function mutate(userId, sessionId, mutator) {
+  const key = `${userId}:${sessionId}`;
+  const previous = writeChains.get(key) || Promise.resolve();
 
   const next = previous.catch(() => {}).then(async () => {
-    const session = await getSession(sessionId);
+    const session = await getSession(userId, sessionId);
     if (!session) return null;
     const result = mutator(session);
     if (result === undefined) return session;
-    await persist(session);
+    await persist(userId, session);
     return result;
   });
 
-  writeChains.set(sessionId, next);
+  writeChains.set(key, next);
   return next;
 }
 
-export async function createSession({ topic = DEFAULT_TOPIC, difficulty = DEFAULT_DIFFICULTY, provider = null } = {}) {
+export async function createSession(userId, { topic = DEFAULT_TOPIC, difficulty = DEFAULT_DIFFICULTY, provider = null } = {}) {
   const now = new Date().toISOString();
   const session = {
     id: `sess_${randomUUID()}`,
@@ -75,19 +76,19 @@ export async function createSession({ topic = DEFAULT_TOPIC, difficulty = DEFAUL
     provider,
     turns: [],
   };
-  await persist(session);
+  await persist(userId, session);
   return session;
 }
 
-export async function getSession(sessionId) {
+export async function getSession(userId, sessionId) {
   if (!isValidSessionId(sessionId)) return null;
-  return readDoc(COLLECTION, sessionId);
+  return readDoc(userId, COLLECTION, sessionId);
 }
 
 /** Appends a completed turn: what the user said, the reply, any corrections. */
-export async function appendTurn(sessionId, turn) {
+export async function appendTurn(userId, sessionId, turn) {
   assertValid(sessionId);
-  return mutate(sessionId, (session) => {
+  return mutate(userId, sessionId, (session) => {
     const record = {
       id: `turn_${session.turns.length + 1}`,
       at: new Date().toISOString(),
@@ -99,17 +100,17 @@ export async function appendTurn(sessionId, turn) {
   });
 }
 
-export async function updateSession(sessionId, patch) {
+export async function updateSession(userId, sessionId, patch) {
   assertValid(sessionId);
-  return mutate(sessionId, (session) => {
+  return mutate(userId, sessionId, (session) => {
     Object.assign(session, patch, { updatedAt: new Date().toISOString() });
     return session;
   });
 }
 
-export async function endSession(sessionId) {
+export async function endSession(userId, sessionId) {
   assertValid(sessionId);
-  return mutate(sessionId, (session) => {
+  return mutate(userId, sessionId, (session) => {
     // Already ended: return the session without rewriting the end time.
     if (session.endedAt) return undefined;
     session.endedAt = new Date().toISOString();
@@ -119,8 +120,8 @@ export async function endSession(sessionId) {
 }
 
 /** Newest first. Summary rows only, without turn bodies. */
-export async function listSessions({ limit = 50 } = {}) {
-  const sessions = await readAllSessions();
+export async function listSessions(userId, { limit = 50 } = {}) {
+  const sessions = await readAllSessions(userId);
   return sessions.slice(0, limit).map((session) => ({
     id: session.id,
     createdAt: session.createdAt,
@@ -134,14 +135,14 @@ export async function listSessions({ limit = 50 } = {}) {
 }
 
 /** Every stored session in full, newest first. The mistake report builds on this. */
-export async function readAllSessions() {
-  const sessions = (await listDocs(COLLECTION)).filter((session) => session?.id);
+export async function readAllSessions(userId) {
+  const sessions = (await listDocs(userId, COLLECTION)).filter((session) => session?.id);
   sessions.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   return sessions;
 }
 
-export async function deleteSession(sessionId) {
+export async function deleteSession(userId, sessionId) {
   if (!isValidSessionId(sessionId)) return false;
-  writeChains.delete(sessionId);
-  return deleteDoc(COLLECTION, sessionId);
+  writeChains.delete(`${userId}:${sessionId}`);
+  return deleteDoc(userId, COLLECTION, sessionId);
 }
