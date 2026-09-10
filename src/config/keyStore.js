@@ -29,9 +29,15 @@ const DEFAULT_CONFIG = {
   providers: {},
 };
 
-/** Per-process, per-user cache. Serverless gives each process its own. */
-const cache = new Map();
-/** One write chain per user, so two requests cannot clobber each other. */
+/**
+ * One write chain per user, so two requests cannot clobber each other.
+ *
+ * There is deliberately no cache of the config itself. A serverless host runs
+ * many instances at once: one caching a key it read earlier will keep using it
+ * after another instance has replaced it, so swapping an exhausted key appears
+ * to do nothing. Reading the document per request is one small query and is
+ * always right.
+ */
 const writeChains = new Map();
 
 function clone(value) {
@@ -60,8 +66,6 @@ function persist(userId, config) {
  * Seeding happens once: after the first write the store is the source of truth.
  */
 export async function load(userId) {
-  if (cache.has(userId)) return cache.get(userId);
-
   const config = await readFromStore(userId);
   let seeded = false;
 
@@ -80,15 +84,8 @@ export async function load(userId) {
     }
   }
 
-  cache.set(userId, config);
   if (seeded) await persist(userId, clone(config));
   return config;
-}
-
-/** Drops cached config. Used by tests, and after a key changes. */
-export function resetCache(userId) {
-  if (userId) cache.delete(userId);
-  else cache.clear();
 }
 
 export async function getActiveProviderId(userId) {
