@@ -69,6 +69,10 @@ const state = {
   handsFree: false,
   /** Set when we cut speech off ourselves, so it does not look like a natural end. */
   speechCancelled: false,
+  /** Counts this session's turns, which is how long a correction card lives. */
+  turnCount: 0,
+  /** Set when the mic was closed only because another screen was open. */
+  micHeldForScreen: false,
   autoSpeak: true,
   voiceURI: '',
   /** The last reply, kept so "Repeat that" works after more turns are added. */
@@ -139,11 +143,32 @@ const MISTAKE_LABEL = {
 };
 
 /**
- * The main screen shows corrections for the current turn only. The permanent
- * record lives on the backend, so removing a card here loses nothing.
+ * How many of your own turns a correction stays on screen for.
+ *
+ * It used to be cleared the moment you spoke again, which meant a correction
+ * was gone before it could be read: the reply arrives, it is spoken aloud, and
+ * by the time anybody has looked away and back the card that explained the
+ * mistake has been removed. Three turns is long enough to finish listening,
+ * scroll up and read it, without the screen filling with old cards.
  */
+const CORRECTION_TURNS = 3;
+
+/** Removes every correction card. Used when the conversation itself is over. */
 function clearCorrections() {
   for (const el of conversationEl.querySelectorAll('.corrections')) el.remove();
+}
+
+/**
+ * Drops the cards that have been on screen longer than CORRECTION_TURNS.
+ *
+ * The permanent record lives on the backend and the whole history is in the
+ * mistake report, so nothing is lost by removing one here.
+ */
+function expireCorrections() {
+  for (const el of conversationEl.querySelectorAll('.corrections')) {
+    const shownAt = Number(el.dataset.turn);
+    if (state.turnCount - shownAt >= CORRECTION_TURNS) el.remove();
+  }
 }
 
 /**
@@ -177,6 +202,9 @@ function showCorrections(userTurnEl, corrections) {
 
   const wrap = document.createElement('div');
   wrap.className = 'corrections';
+  // Stamped with the turn it belongs to, so expireCorrections can tell how
+  // long it has been on screen.
+  wrap.dataset.turn = String(state.turnCount);
   wrap.setAttribute('role', 'note');
   wrap.setAttribute('aria-label', `${corrections.length} correction${corrections.length > 1 ? 's' : ''} for your last turn`);
 
@@ -493,8 +521,10 @@ async function sendTurn(text) {
   if (!spoken || state.busy || !state.sessionId) return;
 
   stopSpeaking();
-  // Speaking again is what clears the previous turn correction from this view.
-  clearCorrections();
+  state.turnCount += 1;
+  // Only the cards that have had their time go. The rest stay put, so a
+  // correction can still be read after the reply has been and gone.
+  expireCorrections();
   const userTurnEl = addTurn('user', spoken);
   showLiveTranscript('');
 
@@ -705,6 +735,10 @@ function startConversation() {
 /** Ends the hands-free conversation. Nothing restarts until the user taps again. */
 function stopConversation(message = '', isError = false) {
   state.handsFree = false;
+  // Any stop cancels a pending return to the mic: ending the session, a bad
+  // API key, or the user tapping off should not have the mic spring back to
+  // life on the next visit to this screen. showScreen re-arms it deliberately.
+  state.micHeldForScreen = false;
   clearSilenceTimer();
   // Whatever was being said is dropped: stop means stop.
   finalTranscript = '';
@@ -790,9 +824,21 @@ function showScreen(name) {
   }
 
   const onConversation = name === 'conversation';
-  // Leaving the conversation screen closes the mic: listening on a screen with
-  // no mic button and no transcript would be invisible.
-  if (!onConversation && state.handsFree) stopConversation();
+
+  // The mic closes while another screen is open, and opens again on the way
+  // back. Leaving it live would mean recording somebody reading their mistake
+  // report, on a screen with no mic button and no transcript to show for it —
+  // but making them tap again afterwards is what sent them to the report in
+  // the first place, so the tap is remembered rather than the state thrown
+  // away. As far as anyone can tell, it never stopped.
+  if (!onConversation && state.handsFree) {
+    // Re-armed after the stop, which clears the flag for every other caller.
+    stopConversation();
+    state.micHeldForScreen = true;
+  } else if (onConversation && state.micHeldForScreen) {
+    state.micHeldForScreen = false;
+    startConversation();
+  }
   for (const el of liveControls) el.hidden = !onConversation;
   // The live transcript strip has its own empty rule; do not force it back on.
   if (onConversation) showLiveTranscript(liveTextEl.textContent);
