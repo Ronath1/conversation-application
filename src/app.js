@@ -26,6 +26,33 @@ const app = express();
 app.use(express.json({ limit: '1mb' }));
 
 /**
+ * Off by default: these two headers let the downloaded voices use more than
+ * one processor thread, and put sign-in at risk.
+ *
+ * The speech model runs in the browser, and WebAssembly is given extra threads
+ * only in a page the browser considers cross-origin isolated. The difference
+ * is large — measured at 2.2 seconds of work per second of speech without it
+ * against 0.9 with it, which is the line between speech that keeps up with
+ * itself and speech that pauses between sentences.
+ *
+ * The cost is that "Cross-Origin-Opener-Policy: same-origin" cuts a popup off
+ * from the page that opened it, and Clerk offers "Continue with Google". That
+ * flow cannot be tested without somebody's real Google account, so this stays
+ * off until a person has turned it on and signed in that way themselves. Turn
+ * it off again and everything reverts: nothing is stored differently and the
+ * voices keep working, more slowly.
+ */
+if (process.env.CROSS_ORIGIN_ISOLATION === 'on') {
+  app.use((req, res, next) => {
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    // The permissive variant: cross-origin scripts, such as Clerk's own from a
+    // CDN, still load, but without credentials attached.
+    res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+    next();
+  });
+}
+
+/**
  * The only endpoint that answers before sign-in. The page needs the
  * publishable key to render the sign-in form at all, and that key is designed
  * to be public.

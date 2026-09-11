@@ -7,9 +7,9 @@
  * runs here in the page: no API key, no per-word billing, and nothing to pay
  * however many people use the app.
  *
- * The price is paid by the listener, once: about 92MB of model downloaded the
- * first time, then cached by the browser and reused offline. That is why this
- * is never loaded unless somebody asks for it — see load().
+ * The price is paid by the listener, once: the model is downloaded the first
+ * time, then cached by the browser and reused offline. That is why this is
+ * never loaded unless somebody asks for it — see load().
  *
  * The model itself lives in kokoro-worker.js, off the page's thread. This file
  * only asks it for audio, plays what comes back, and guesses which word is
@@ -46,6 +46,13 @@ export function findVoice(voiceURI) {
 export function isKokoroVoice(voiceURI) {
   return typeof voiceURI === 'string' && voiceURI.startsWith('kokoro:');
 }
+
+/**
+ * Roughly what picking a voice will cost to download, for saying so before it
+ * is spent. The worker chooses between two builds by the same test, so this
+ * stays honest without the two files having to agree about anything else.
+ */
+export const downloadSize = self.crossOriginIsolated ? '165MB' : '95MB';
 
 /* ---------- the worker ---------- */
 
@@ -219,10 +226,10 @@ export function stop() {
 /**
  * Speaks one reply.
  *
- * Generation is slow enough to notice — this is a neural model running on a
- * CPU — so the reply is made a sentence at a time and the first sentence
- * starts playing while the rest are still being generated. Waiting for the
- * whole reply before any sound came out would feel broken.
+ * The reply is made a sentence at a time, and the first sentence starts
+ * playing while the rest are still being generated. Waiting for a whole reply
+ * before any sound came out would feel broken, and it would get worse the more
+ * the model had to say.
  *
  * @param {string} text
  * @param {object} [options]

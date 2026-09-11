@@ -939,7 +939,7 @@ function drawVoiceGrid() {
 const NEURAL_NOTES = {
   idle:
     'Made on this device, so they sound the same on every computer and phone, and keep working ' +
-    'offline. Picking one downloads it: about 92MB, once per device.',
+    `offline. Picking one downloads it: about ${tts.neuralDownloadSize}, once per device.`,
   loading: 'Downloading the voices. This happens once on this device, and you can keep talking meanwhile.',
   ready: 'Made on this device, so they sound the same everywhere and keep working offline.',
   failed: 'The voices could not be downloaded. Check the connection, then pick one again to retry.',

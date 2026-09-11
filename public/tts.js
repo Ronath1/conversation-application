@@ -44,6 +44,7 @@ export function findVoice(voiceURI) {
 
 export const neuralStatus = kokoro.status;
 export const onNeuralStatus = kokoro.onStatus;
+export const neuralDownloadSize = kokoro.downloadSize;
 
 /** Starts the download, or resolves at once if it already happened. */
 export function loadNeural() {

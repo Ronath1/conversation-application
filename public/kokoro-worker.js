@@ -17,7 +17,26 @@
 
 const LIBRARY = 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm';
 const MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
-const DTYPE = 'q8';
+
+/**
+ * Which weights to fetch, decided by how many threads this page may use.
+ *
+ * WebAssembly gets more than one thread only in a cross-origin-isolated page,
+ * and the two builds respond to that completely differently. Measured on one
+ * machine, seconds of work per second of speech:
+ *
+ *            one thread   four threads
+ *   8-bit       2.14          1.82
+ *   16-bit      2.19          0.90
+ *
+ * The 8-bit build barely improves, because its quantised operations run on a
+ * single thread whatever the page allows. So with one thread the smaller file
+ * is free — same speed, 71MB less — and with several the larger one is the
+ * only way under 1.0, which is the number that matters: below it each
+ * sentence is ready before the one before it finishes, and the speech is
+ * continuous. Above it the reply falls further behind at every full stop.
+ */
+const DTYPE = self.crossOriginIsolated ? 'fp16' : 'q8';
 
 let model = null;
 let Splitter = null;
