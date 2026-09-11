@@ -203,8 +203,18 @@ body {
   white-space: nowrap;
 }
 
+/*
+ * Three zones: title left, tabs centred, actions right.
+ *
+ * Grid rather than flex, because the tabs must sit in the middle of the
+ * window, not in the middle of whatever space the title and buttons leave
+ * over. The two 1fr columns are equal whatever they hold, so the centre column
+ * lands on the true centre; minmax(0, …) lets them shrink instead of pushing
+ * the tabs off-centre when the title or the buttons get wide.
+ */
 .topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   min-height: 56px;
@@ -216,8 +226,11 @@ body {
   z-index: 5;
 }
 
-.topbar h1 {
-  margin-right: auto;
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .topbar .ghost {
@@ -883,23 +896,66 @@ body {
   color: var(--muted);
 }
 
-@media (max-width: 620px) {
+/*
+ * Too narrow for three zones side by side: the title takes the first row with
+ * the buttons, and the tabs get a full row of their own underneath.
+ */
+@media (max-width: 720px) {
   .topbar {
-    flex-wrap: wrap;
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 8px;
   }
 
   .topbar h1 {
-    font-size: 15px;
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .topbar-actions {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .tabs {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    /* Centred, and only as wide as the three pills: a stretched pill group
+       would draw one long bar across the window. */
+    justify-self: center;
   }
 
   /* Thumbs need a bigger target than a cursor does. */
   .tab {
     min-height: 44px;
   }
+}
+
+/*
+ * A phone cannot hold the title and three buttons on one line: at 375px the
+ * buttons alone take most of the width, and the app name was being cut off
+ * mid-word behind them. Each zone gets its own row instead.
+ */
+@media (max-width: 620px) {
+  .topbar {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 6px;
+    padding-bottom: 10px;
+  }
+
+  .topbar h1 {
+    grid-row: 1;
+    grid-column: 1;
+    font-size: 15px;
+  }
 
   .tabs {
-    flex: 1;
-    justify-content: center;
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .topbar-actions {
+    grid-row: 3;
+    grid-column: 1;
   }
 }
 
