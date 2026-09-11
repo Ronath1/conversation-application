@@ -43,6 +43,7 @@ const STORAGE_KEYS = {
   voice: 'ecp.voiceURI',
   topic: 'ecp.topic',
   difficulty: 'ecp.difficulty',
+  showFixes: 'ecp.showFixes',
 };
 
 /** Beginners asked for a slower pace, so difficulty drives the speaking rate. */
@@ -137,6 +138,31 @@ function clearCorrections() {
   for (const el of conversationEl.querySelectorAll('.corrections')) el.remove();
 }
 
+/**
+ * Whether corrections open showing the fix.
+ *
+ * Open is the default: the fix is the reason the app exists, and hiding it by
+ * default would make most turns look like nothing happened. But some people do
+ * not want every slip spelled out mid-conversation, so hiding one card is
+ * remembered and every later card arrives hidden too, until they open one
+ * again. The badge stays visible either way, so a correction is never silent.
+ */
+function fixesShown() {
+  return readStored(STORAGE_KEYS.showFixes, 'true') !== 'false';
+}
+
+/** Puts one card into its open or closed state, label and all. */
+function setCardOpen(card, open) {
+  const head = card.querySelector('.correction-head');
+  const body = card.querySelector('.correction-body');
+  const hint = card.querySelector('.correction-hint');
+
+  card.classList.toggle('closed', !open);
+  body.hidden = !open;
+  head.setAttribute('aria-expanded', String(open));
+  hint.textContent = open ? 'tap to hide fixes' : 'tap to see the fix';
+}
+
 /** Renders correction cards directly under the user turn they belong to. */
 function showCorrections(userTurnEl, corrections) {
   if (!corrections?.length) return;
@@ -150,9 +176,23 @@ function showCorrections(userTurnEl, corrections) {
     const card = document.createElement('div');
     card.className = 'correction';
 
+    // The whole header is the control, so the target is the width of the card
+    // rather than a small chevron.
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'correction-head';
+
     const badge = document.createElement('span');
     badge.className = 'badge';
     badge.textContent = MISTAKE_LABEL[correction.type] || MISTAKE_LABEL.other;
+
+    const hint = document.createElement('span');
+    hint.className = 'correction-hint';
+
+    head.append(badge, hint);
+
+    const body = document.createElement('div');
+    body.className = 'correction-body';
 
     const fix = document.createElement('p');
     fix.className = 'fix';
@@ -161,15 +201,24 @@ function showCorrections(userTurnEl, corrections) {
     const now = document.createElement('strong');
     now.textContent = correction.corrected;
     fix.append(was, ' ', now);
-
-    card.append(badge, fix);
+    body.append(fix);
 
     if (correction.explanation) {
       const why = document.createElement('p');
       why.className = 'why';
       why.textContent = correction.explanation;
-      card.append(why);
+      body.append(why);
     }
+
+    card.append(head, body);
+    setCardOpen(card, fixesShown());
+
+    head.addEventListener('click', () => {
+      const open = body.hidden;
+      writeStored(STORAGE_KEYS.showFixes, String(open));
+      // Every card on screen follows, so the setting never looks half-applied.
+      for (const other of conversationEl.querySelectorAll('.correction')) setCardOpen(other, open);
+    });
 
     wrap.append(card);
   }

@@ -320,9 +320,40 @@ body {
   font-size: 16px;
 }
 
+/* The header is a button, but it should read as part of the card. */
+.correction-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.correction-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.correction-hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Closed, the card is only its badge: shorter, and level with the bubble. */
+.correction.closed {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
 .correction .badge {
   display: inline-block;
-  margin-bottom: 6px;
   padding: 4px 8px;
   font: 600 11px/1 ui-monospace, Menlo, monospace;
   letter-spacing: 0.06em;
@@ -333,7 +364,7 @@ body {
 }
 
 .correction .fix {
-  margin: 0;
+  margin: 6px 0 0;
   overflow-wrap: anywhere;
 }
 
