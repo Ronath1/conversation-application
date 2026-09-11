@@ -125,6 +125,52 @@ const MALE_STYLES = ['crop', 'buzz', 'curly', 'fringe'];
 const ANY_STYLE = ['crop', 'buzz', 'curly', 'fringe', 'bob', 'long'];
 
 /**
+ * The mark for "whatever voice the browser picks".
+ *
+ * Not a face: that entry is not a person, and giving it one implies a
+ * character the app cannot deliver — the browser may pick anybody.
+ *
+ * @param {number} [size]
+ * @returns {SVGElement}
+ */
+export function defaultMark(size = 84) {
+  const svg = el('svg', {
+    class: 'avatar',
+    viewBox: '0 0 96 96',
+    width: size,
+    height: size,
+    role: 'img',
+    'aria-label': 'The default voice',
+  });
+
+  svg.append(el('rect', { x: 0, y: 0, width: 96, height: 96, fill: '#e7edfb' }));
+
+  // A speaker cone, then two arcs for sound leaving it.
+  svg.append(
+    el('path', {
+      d: 'M34 40 h8 l12 -10 v36 l-12 -10 h-8 q-3 0 -3 -3 v-10 q0 -3 3 -3 z',
+      fill: '#2a5bd7',
+    }),
+  );
+  for (const [radius, width] of [
+    [9, 3],
+    [16, 3],
+  ]) {
+    svg.append(
+      el('path', {
+        d: `M60 ${48 - radius} a ${radius} ${radius} 0 0 1 0 ${radius * 2}`,
+        fill: 'none',
+        stroke: '#2a5bd7',
+        'stroke-width': width,
+        'stroke-linecap': 'round',
+      }),
+    );
+  }
+
+  return svg;
+}
+
+/**
  * Draws one face.
  *
  * @param {string} voiceName The voice's full name, used as the seed.

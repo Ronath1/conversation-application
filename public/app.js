@@ -13,7 +13,8 @@ import * as report from './report.js';
 import * as settings from './settings.js';
 import * as auth from './auth.js';
 import { apiFetch } from './api.js';
-import { avatar, shortName } from './avatar.js';
+import { avatar, defaultMark, shortName } from './avatar.js';
+import { portraitFor } from './portraits.js';
 import { initTheme } from './theme.js';
 
 const conversationEl = document.getElementById('conversation');
@@ -801,11 +802,38 @@ function chooseVoice(voiceURI) {
   drawVoiceGrid();
 }
 
+/**
+ * A photograph when one is shipped for this voice, a drawn face otherwise.
+ *
+ * The image carries its own fallback: if the file is missing or fails to load,
+ * it is replaced by the drawn face rather than leaving a broken tile.
+ */
+function faceFor(voice, size) {
+  if (!voice) return defaultMark(size);
+
+  const source = portraitFor(voice);
+  if (!source) return avatar(voice.name, size);
+
+  const image = document.createElement('img');
+  image.className = 'avatar';
+  image.src = source;
+  image.width = size;
+  image.height = size;
+  image.alt = '';
+  // Not lazy: these are a few KB each, and a lazy image inside a modal that
+  // starts hidden can sit unloaded until something forces a layout.
+  image.decoding = 'async';
+  image.addEventListener('error', () => {
+    image.replaceWith(avatar(voice.name, size));
+  });
+  return image;
+}
+
 function drawVoiceButton() {
   const chosen = speech.findVoice(state.voiceURI);
   voiceButtonLabel.textContent = chosen ? shortName(chosen.name) : 'Voices';
   // A small face on the button says which voice is set without opening anything.
-  voiceButtonFace.replaceChildren(chosen ? avatar(chosen.name, 24) : document.createTextNode(''));
+  voiceButtonFace.replaceChildren(chosen ? faceFor(chosen, 24) : document.createTextNode(''));
   voiceButtonFace.hidden = !chosen;
 }
 
@@ -825,7 +853,7 @@ function drawVoiceGrid() {
 
     const face = document.createElement('span');
     face.className = 'voice-face';
-    face.append(avatar(name, 84));
+    face.append(faceFor(voice, 84));
 
     const label = document.createElement('span');
     label.className = 'voice-name';

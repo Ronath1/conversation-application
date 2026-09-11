@@ -1674,6 +1674,13 @@ a.get-key-button:hover {
   display: block;
 }
 
+/* A photograph and a drawn face share the class, so both crop to the circle.
+   object-fit stops a portrait that is not perfectly square from squashing. */
+img.avatar {
+  object-fit: cover;
+  background: var(--bg);
+}
+
 .voice-name {
   font-weight: 600;
   font-size: 14px;
