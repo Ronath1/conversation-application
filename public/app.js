@@ -877,13 +877,16 @@ async function chooseNeuralVoice(voice) {
       // drawNeuralStatus already puts the failure on screen.
       return;
     }
-    // A download runs for a minute or more, and the window may be long closed
-    // by the time it lands. Changing the voice then would be a surprise.
-    if (voiceModal.hidden) return;
+    // The voice is set even if the window was closed while the model came
+    // down. That download is minutes long on a slow connection, and clicking
+    // the tile was the request: doing nothing with it would look like the
+    // whole thing had failed.
   }
 
   chooseVoice(voice.voiceURI);
-  previewVoice(voice);
+  // Heard only while the window is open. Speaking into a closed window, some
+  // minutes after the tile was clicked, is a voice out of nowhere.
+  if (!voiceModal.hidden) previewVoice(voice);
 }
 
 /** One tile per voice: a face, the short name, and the accent underneath. */
@@ -941,6 +944,10 @@ const NEURAL_NOTES = {
     'Made on this device, so they sound the same on every computer and phone, and keep working ' +
     `offline. Picking one downloads it: about ${tts.neuralDownloadSize}, once per device.`,
   loading: 'Downloading the voices. This happens once on this device, and you can keep talking meanwhile.',
+  // Only shown once real bytes are moving, so it never claims "0MB of 0MB".
+  loadingWithSize: (loaded, total) =>
+    `Downloading the voices: ${Math.round(loaded / 1048576)}MB of ${Math.round(total / 1048576)}MB. ` +
+    'This happens once on this device, and you can keep talking meanwhile.',
   ready: 'Made on this device, so they sound the same everywhere and keep working offline.',
   failed: 'The voices could not be loaded.',
 };
@@ -950,9 +957,11 @@ function drawNeuralStatus(status) {
   // every failure sends people to check their wifi over a problem that was
   // never a download.
   const failure = status.phase === 'failed' ? status.error?.message : '';
-  neuralNote.textContent = failure
-    ? `${failure} Pick a voice again to try once more.`
-    : NEURAL_NOTES[status.phase] || '';
+  const sized = status.phase === 'loading' && status.total > 0;
+
+  if (failure) neuralNote.textContent = `${failure} Pick a voice again to try once more.`;
+  else if (sized) neuralNote.textContent = NEURAL_NOTES.loadingWithSize(status.loaded, status.total);
+  else neuralNote.textContent = NEURAL_NOTES[status.phase] || '';
   neuralNote.classList.toggle('error', status.phase === 'failed');
 
   // Left visible but unclickable while loading: hiding the tiles would make

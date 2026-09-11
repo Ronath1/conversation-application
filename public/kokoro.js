@@ -57,7 +57,7 @@ export const downloadSize = self.crossOriginIsolated ? '165MB' : '95MB';
 /* ---------- the worker ---------- */
 
 /** idle, loading, ready or failed. Drives what the voices window offers. */
-let state = { phase: 'idle', percent: 0, error: null };
+let state = { phase: 'idle', percent: 0, loaded: 0, total: 0, error: null };
 const watchers = new Set();
 
 let worker = null;
@@ -84,7 +84,7 @@ export function status() {
 
 function handleMessage(message) {
   if (message.type === 'progress') {
-    announce({ percent: message.percent });
+    announce({ percent: message.percent, loaded: message.loaded, total: message.total });
     return;
   }
   if (message.type === 'ready') {
@@ -112,7 +112,7 @@ export function load() {
   if (state.phase === 'ready') return Promise.resolve();
   if (loading) return loading;
 
-  announce({ phase: 'loading', percent: 0, error: null });
+  announce({ phase: 'loading', percent: 0, loaded: 0, total: 0, error: null });
 
   if (!worker) {
     worker = new Worker('/kokoro-worker.js', { type: 'module' });

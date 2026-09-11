@@ -44,15 +44,27 @@ let loading = null;
 let cancelled = new Set();
 
 /**
+ * Anything smaller than this is a config or a tokenizer, not the model.
+ */
+const REAL_DOWNLOAD_BYTES = 1024 * 1024;
+
+/**
  * Turns per-file download events into one percentage.
  *
  * Several files arrive at once, so reporting whichever event landed last makes
- * the bar jump backwards. Totals are summed instead.
+ * the bar jump backwards, and totals have to be summed instead.
+ *
+ * The small files are then left out of that sum. They are a few kilobytes and
+ * they finish first, so while the model has not yet reported anything they are
+ * the whole of what is known: the bar fills to 99%, the model appears, and it
+ * collapses to 1% and starts crawling. That reads as a download that failed
+ * and restarted. Counting only files above a megabyte keeps it honest — it
+ * moves once, in one direction.
  */
 function progressReporter() {
   const files = new Map();
   return (event) => {
-    if (event.status !== 'progress' || !event.total) return;
+    if (event.status !== 'progress' || !event.total || event.total < REAL_DOWNLOAD_BYTES) return;
     files.set(event.file, { loaded: event.loaded || 0, total: event.total });
 
     let loaded = 0;
@@ -62,7 +74,12 @@ function progressReporter() {
       total += file.total;
     }
     if (total > 0) {
-      self.postMessage({ type: 'progress', percent: Math.min(99, Math.round((loaded / total) * 100)) });
+      self.postMessage({
+        type: 'progress',
+        percent: Math.min(99, Math.round((loaded / total) * 100)),
+        loaded,
+        total,
+      });
     }
   };
 }
