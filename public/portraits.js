@@ -17,6 +17,23 @@
 const DIRECTORY = '/avatars';
 
 /**
+ * The downloadable voices, which are the same six everywhere.
+ *
+ * Matched on voiceURI rather than on the name, because these are chosen by
+ * this project rather than reported by the operating system: the pairing is
+ * fixed and there is nothing to guess. Each voice takes the portrait whose
+ * accent and gender match it, so the picture never contradicts the sound.
+ */
+const NEURAL_PORTRAITS = {
+  'kokoro:af_heart': 'zira',
+  'kokoro:af_bella': 'us-english',
+  'kokoro:am_michael': 'david',
+  'kokoro:am_fenrir': 'mark',
+  'kokoro:bf_emma': 'uk-female',
+  'kokoro:bm_george': 'uk-male',
+};
+
+/**
  * Checked in order, first match wins.
  *
  * Named voices come first, because "Microsoft Zira - English (United States)"
@@ -49,6 +66,9 @@ function isBritish(name, lang) {
  */
 export function portraitFor(voice) {
   if (!voice?.name) return null;
+
+  const fixed = NEURAL_PORTRAITS[voice.voiceURI];
+  if (fixed) return `${DIRECTORY}/${fixed}.webp`;
 
   const name = String(voice.name).toLowerCase();
   const lang = String(voice.lang || '');

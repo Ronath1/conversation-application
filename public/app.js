@@ -8,7 +8,7 @@
  * after every reply until the user taps stop.
  */
 
-import * as speech from './speech.js';
+import * as tts from './tts.js';
 import * as report from './report.js';
 import * as settings from './settings.js';
 import * as auth from './auth.js';
@@ -32,6 +32,10 @@ const voiceButtonFace = document.getElementById('voice-button-face');
 const voiceButtonLabel = document.getElementById('voice-button-label');
 const voiceModal = document.getElementById('voice-modal');
 const voiceGrid = document.getElementById('voice-grid');
+const neuralGroup = document.getElementById('neural-group');
+const neuralGrid = document.getElementById('neural-grid');
+const neuralNote = document.getElementById('neural-note');
+const neuralProgress = document.getElementById('neural-progress');
 const repeatButton = document.getElementById('repeat');
 
 const topicSelect = document.getElementById('topic-select');
@@ -49,6 +53,9 @@ const STORAGE_KEYS = {
 
 /** Beginners asked for a slower pace, so difficulty drives the speaking rate. */
 const RATE_BY_DIFFICULTY = { beginner: 0.85, intermediate: 1, advanced: 1.05 };
+
+/** Shown while a downloaded voice is making audio, and cleared when it speaks. */
+const MAKING_AUDIO = 'Making the audio…';
 
 const state = {
   sessionId: null,
@@ -354,7 +361,7 @@ function updateControls() {
   topicSelect.disabled = !state.sessionId || state.ended;
   difficultySelect.disabled = !state.sessionId || state.ended;
 
-  repeatButton.disabled = !state.lastReply || !speech.isSupported;
+  repeatButton.disabled = !state.lastReply || !tts.isSupported;
   repeatButton.textContent = state.speaking ? 'Stop' : 'Repeat that';
 }
 
@@ -372,17 +379,27 @@ function paintSpokenWord(el, text, range) {
 }
 
 function speakReply(text, el) {
-  if (!speech.isSupported || !text) return false;
+  if (!tts.isSupported || !text) return false;
 
-  const started = speech.speak(text, {
-    voice: speech.findVoice(state.voiceURI),
+  const started = tts.speak(text, {
+    voice: tts.findVoice(state.voiceURI),
     rate: RATE_BY_DIFFICULTY[state.difficulty] ?? 1,
+    // A downloaded voice is made on this machine, so there is a pause between
+    // the reply appearing and the first sound. Said out loud, because silence
+    // after a reply reads as a broken app.
+    onPrepare: () => setStatus(MAKING_AUDIO),
     onStart: () => {
       state.speaking = true;
+      // Only our own message is cleared, so a warning raised meanwhile stands.
+      if (statusEl.textContent === MAKING_AUDIO) setStatus('');
       el?.classList.add('speaking');
       updateControls();
     },
     onWord: (range) => paintSpokenWord(el, text, range),
+    // A downloaded voice can fail after speak() has already returned true: the
+    // model is fetched and run in the background. Said out loud, because a
+    // reply that stays silent otherwise looks like the app ignored it.
+    onError: () => setStatus('That voice could not make the audio. Pick another one under Voices.', true),
     onEnd: () => {
       state.speaking = false;
       el?.classList.remove('speaking');
@@ -401,7 +418,7 @@ function speakReply(text, el) {
 function stopSpeaking() {
   if (!state.speaking) return;
   state.speechCancelled = true;
-  speech.stop();
+  tts.stop();
   state.speaking = false;
   if (state.lastReplyEl) {
     state.lastReplyEl.classList.remove('speaking');
@@ -749,7 +766,7 @@ newSessionButton.addEventListener('click', async () => {
 });
 
 // A tab closed mid-sentence otherwise keeps speaking in some browsers.
-window.addEventListener('beforeunload', () => speech.stop());
+window.addEventListener('beforeunload', () => tts.stop());
 
 /* ---------- screens ---------- */
 
@@ -830,55 +847,123 @@ function faceFor(voice, size) {
 }
 
 function drawVoiceButton() {
-  const chosen = speech.findVoice(state.voiceURI);
+  const chosen = tts.findVoice(state.voiceURI);
   voiceButtonLabel.textContent = chosen ? shortName(chosen.name) : 'Voices';
   // A small face on the button says which voice is set without opening anything.
   voiceButtonFace.replaceChildren(chosen ? faceFor(chosen, 24) : document.createTextNode(''));
   voiceButtonFace.hidden = !chosen;
 }
 
-/** One tile per voice: a drawn face, the short name, and the accent underneath. */
-function drawVoiceGrid() {
-  const tiles = [];
-
-  const makeTile = (voice) => {
-    const name = voice ? voice.name : 'Default voice';
-    const value = voice ? voice.voiceURI : '';
-
-    const tile = document.createElement('button');
-    tile.type = 'button';
-    tile.className = 'voice-tile';
-    tile.setAttribute('aria-pressed', String(state.voiceURI === value));
-    if (state.voiceURI === value) tile.classList.add('picked');
-
-    const face = document.createElement('span');
-    face.className = 'voice-face';
-    face.append(faceFor(voice, 84));
-
-    const label = document.createElement('span');
-    label.className = 'voice-name';
-    label.textContent = voice ? shortName(voice.name) : 'Default';
-
-    const detail = document.createElement('span');
-    detail.className = 'voice-detail';
-    detail.textContent = voice ? voice.lang : "Your browser's choice";
-
-    tile.append(face, label, detail);
-    tile.addEventListener('click', () => {
-      chooseVoice(value);
-      // Hearing it is the whole point, so the tile speaks when it is picked.
-      speech.speak(`Hello. I am ${voice ? shortName(voice.name) : 'the default voice'}.`, {
-        voice,
-        rate: RATE_BY_DIFFICULTY[state.difficulty] ?? 1,
-      });
-    });
-    return tile;
-  };
-
-  tiles.push(makeTile(null));
-  for (const voice of voices) tiles.push(makeTile(voice));
-  voiceGrid.replaceChildren(...tiles);
+/** Hearing it is the whole point, so a tile speaks when it is picked. */
+function previewVoice(voice) {
+  tts.speak(`Hello. I am ${voice ? shortName(voice.name) : 'the default voice'}.`, {
+    voice,
+    rate: RATE_BY_DIFFICULTY[state.difficulty] ?? 1,
+  });
 }
+
+/**
+ * Picks a downloaded voice, fetching the model first when this device has
+ * never used one.
+ *
+ * The download starts here and nowhere else, so nobody spends 92MB of someone
+ * else's data without having asked for it.
+ */
+async function chooseNeuralVoice(voice) {
+  if (tts.neuralStatus().phase !== 'ready') {
+    try {
+      await tts.loadNeural();
+    } catch {
+      // drawNeuralStatus already puts the failure on screen.
+      return;
+    }
+    // A download runs for a minute or more, and the window may be long closed
+    // by the time it lands. Changing the voice then would be a surprise.
+    if (voiceModal.hidden) return;
+  }
+
+  chooseVoice(voice.voiceURI);
+  previewVoice(voice);
+}
+
+/** One tile per voice: a face, the short name, and the accent underneath. */
+function makeVoiceTile(voice) {
+  const value = voice ? voice.voiceURI : '';
+
+  const tile = document.createElement('button');
+  tile.type = 'button';
+  tile.className = 'voice-tile';
+  tile.setAttribute('aria-pressed', String(state.voiceURI === value));
+  if (state.voiceURI === value) tile.classList.add('picked');
+
+  const face = document.createElement('span');
+  face.className = 'voice-face';
+  face.append(faceFor(voice, 84));
+
+  const label = document.createElement('span');
+  label.className = 'voice-name';
+  label.textContent = voice ? shortName(voice.name) : 'Default';
+
+  const detail = document.createElement('span');
+  detail.className = 'voice-detail';
+  detail.textContent = voice ? voice.lang : "Your browser's choice";
+
+  tile.append(face, label, detail);
+  tile.addEventListener('click', () => {
+    if (voice && tts.isNeural(voice.voiceURI)) {
+      chooseNeuralVoice(voice);
+      return;
+    }
+    chooseVoice(value);
+    previewVoice(voice);
+  });
+  return tile;
+}
+
+function drawVoiceGrid() {
+  const tiles = [makeVoiceTile(null)];
+  for (const voice of voices) tiles.push(makeVoiceTile(voice));
+  voiceGrid.replaceChildren(...tiles);
+
+  const neural = tts.neuralVoices();
+  neuralGroup.hidden = neural.length === 0;
+  if (neural.length > 0) neuralGrid.replaceChildren(...neural.map(makeVoiceTile));
+}
+
+/**
+ * What the downloadable voices say about themselves.
+ *
+ * The size is stated before anything is spent, not after, because a number
+ * that only appears once the download is running is not a choice.
+ */
+const NEURAL_NOTES = {
+  idle:
+    'Made on this device, so they sound the same on every computer and phone, and keep working ' +
+    'offline. Picking one downloads it: about 92MB, once per device.',
+  loading: 'Downloading the voices. This happens once on this device, and you can keep talking meanwhile.',
+  ready: 'Made on this device, so they sound the same everywhere and keep working offline.',
+  failed: 'The voices could not be downloaded. Check the connection, then pick one again to retry.',
+};
+
+function drawNeuralStatus(status) {
+  neuralNote.textContent = NEURAL_NOTES[status.phase] || '';
+  neuralNote.classList.toggle('error', status.phase === 'failed');
+
+  // Left visible but unclickable while loading: hiding the tiles would make
+  // the window jump and lose sight of what is being waited for.
+  neuralGrid.classList.toggle('waiting', status.phase === 'loading');
+
+  neuralProgress.hidden = status.phase !== 'loading';
+  neuralProgress.firstElementChild.style.width = `${status.percent}%`;
+}
+
+// Subscribed out here rather than in setUpVoices, which waits for a signed-in
+// user: the voices window has its own button and must describe itself
+// correctly whenever it opens.
+tts.onNeuralStatus((status) => {
+  drawNeuralStatus(status);
+  if (status.phase === 'ready' && !voiceModal.hidden) drawVoiceGrid();
+});
 
 function openVoices() {
   drawVoiceGrid();
@@ -889,7 +974,7 @@ function openVoices() {
 function closeVoices() {
   voiceModal.hidden = true;
   // Stop a sample mid-sentence rather than talking to a closed window.
-  if (!state.speaking) speech.stop();
+  if (!state.speaking) tts.stop();
   voiceButton.focus();
 }
 
@@ -903,7 +988,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 function setUpVoices() {
-  if (!speech.isSupported) {
+  if (!tts.isSupported) {
     autoSpeakInput.checked = false;
     autoSpeakInput.disabled = true;
     voiceButton.disabled = true;
@@ -917,10 +1002,15 @@ function setUpVoices() {
   state.voiceURI = readStored(STORAGE_KEYS.voice, '');
   autoSpeakInput.checked = state.autoSpeak;
 
-  speech.onVoicesReady((ready) => {
+  // A downloaded voice is already on this device, so fetching it now means the
+  // first reply is not held up while the model loads. This costs no bytes: the
+  // browser serves it from its cache.
+  if (tts.isNeural(state.voiceURI)) tts.loadNeural().catch(() => {});
+
+  tts.onVoicesReady((ready) => {
     voices = ready;
     // Keep the stored choice only while that voice still exists on this machine.
-    if (!speech.findVoice(state.voiceURI)) state.voiceURI = '';
+    if (!tts.findVoice(state.voiceURI)) state.voiceURI = '';
     drawVoiceButton();
     if (!voiceModal.hidden) drawVoiceGrid();
   });

@@ -133,11 +133,25 @@
           <button id="voice-close" class="ghost modal-close" type="button" aria-label="Close voices">&times;</button>
         </div>
         <p class="modal-note">
-          Pick who reads the replies to you. These are your device's own voices, so the list is
-          different on every computer and phone. The pictures stand for the voices; nobody shown
-          here is a real person.
+          Pick who reads the replies to you. The pictures stand for the voices; nobody shown here
+          is a real person.
         </p>
-        <div class="voice-grid" id="voice-grid"></div>
+
+        <section class="voice-group" id="neural-group" hidden>
+          <h3 class="voice-group-title">Better voices</h3>
+          <p class="voice-group-note" id="neural-note"></p>
+          <p class="voice-progress" id="neural-progress" hidden><span></span></p>
+          <div class="voice-grid" id="neural-grid"></div>
+        </section>
+
+        <section class="voice-group">
+          <h3 class="voice-group-title">Your device's voices</h3>
+          <p class="voice-group-note">
+            Free and instant, but chosen by your operating system, so they sound different on every
+            computer and phone.
+          </p>
+          <div class="voice-grid" id="voice-grid"></div>
+        </section>
       </div>
     </div>
 

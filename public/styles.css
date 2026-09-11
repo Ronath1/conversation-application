@@ -1633,6 +1633,28 @@ a.get-key-button:hover {
   font-size: 13px;
 }
 
+.voice-group + .voice-group {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.voice-group-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.voice-group-note {
+  margin: 4px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.voice-group-note.error {
+  color: var(--error);
+}
+
 .voice-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
@@ -1691,4 +1713,27 @@ img.avatar {
 .voice-detail {
   font-size: 11px;
   color: var(--muted);
+}
+
+/* While the model downloads, the tiles stay visible but cannot be picked:
+   removing them would make the window jump and hide what is being waited for. */
+.voice-grid.waiting .voice-tile {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.voice-progress {
+  height: 4px;
+  margin: 0 0 14px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.voice-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.2s;
 }
