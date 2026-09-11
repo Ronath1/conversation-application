@@ -118,7 +118,14 @@ export function load() {
     worker = new Worker('/kokoro-worker.js', { type: 'module' });
     worker.addEventListener('message', (event) => handleMessage(event.data));
     worker.addEventListener('error', () => {
-      announce({ phase: 'failed', percent: 0, error: new Error('The voice worker could not start.') });
+      // Almost always the worker script arriving without the header the page
+      // requires, which is a server setting rather than anything the listener
+      // can act on — so the message does not send them to check their wifi.
+      announce({
+        phase: 'failed',
+        percent: 0,
+        error: new Error('The voices cannot start on this site.'),
+      });
     });
   }
 

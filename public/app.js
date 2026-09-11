@@ -942,11 +942,17 @@ const NEURAL_NOTES = {
     `offline. Picking one downloads it: about ${tts.neuralDownloadSize}, once per device.`,
   loading: 'Downloading the voices. This happens once on this device, and you can keep talking meanwhile.',
   ready: 'Made on this device, so they sound the same everywhere and keep working offline.',
-  failed: 'The voices could not be downloaded. Check the connection, then pick one again to retry.',
+  failed: 'The voices could not be loaded.',
 };
 
 function drawNeuralStatus(status) {
-  neuralNote.textContent = NEURAL_NOTES[status.phase] || '';
+  // The engine says what went wrong when it knows. Blaming the connection for
+  // every failure sends people to check their wifi over a problem that was
+  // never a download.
+  const failure = status.phase === 'failed' ? status.error?.message : '';
+  neuralNote.textContent = failure
+    ? `${failure} Pick a voice again to try once more.`
+    : NEURAL_NOTES[status.phase] || '';
   neuralNote.classList.toggle('error', status.phase === 'failed');
 
   // Left visible but unclickable while loading: hiding the tiles would make

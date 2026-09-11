@@ -5,5 +5,16 @@
       "includeFiles": "public/**"
     }
   },
+  "headers": [
+    {
+      "source": "/kokoro-worker.js",
+      "headers": [
+        {
+          "key": "Cross-Origin-Embedder-Policy",
+          "value": "credentialless"
+        }
+      ]
+    }
+  ],
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }

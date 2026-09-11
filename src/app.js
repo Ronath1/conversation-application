@@ -41,6 +41,14 @@ app.use(express.json({ limit: '1mb' }));
  * off until a person has turned it on and signed in that way themselves. Turn
  * it off again and everything reverts: nothing is stored differently and the
  * voices keep working, more slowly.
+ *
+ * This covers only what the app itself serves. On a serverless host the files
+ * under public/ are served by the platform's own static layer, which never
+ * runs this middleware — and a browser refuses to start a worker whose script
+ * arrives without a policy of its own from a page that has one. So
+ * public/kokoro-worker.js gets its header from vercel.json instead. Losing
+ * that is not a slow app but a silent one: the worker never starts, the
+ * download bar sits at nothing, and no reply is ever spoken.
  */
 if (process.env.CROSS_ORIGIN_ISOLATION === 'on') {
   app.use((req, res, next) => {
