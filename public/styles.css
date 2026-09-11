@@ -1,38 +1,174 @@
-:root {
-  --bg: #f6f7f9;
-  --panel: #ffffff;
-  --ink: #1b1f24;
-  --muted: #6b7280;
-  --line: #e3e6ea;
-  --user: #2563eb;
-  --user-ink: #ffffff;
-  --ai: #eef0f3;
-  --error: #b42318;
-  --error-bg: #fef3f2;
-  --accent: #2563eb;
-  --fix-bg: #fffbeb;
-  --fix-line: #fde68a;
-  --fix-accent: #b45309;
-  --fix-badge: #fef3c7;
-  --fix-ink: #15803d;
+/*
+ * Desk Light.
+ *
+ * Compact and cool: soft-shadowed white cards on a blue-grey ground. Every
+ * colour, radius, shadow and size is a token here, so the light and dark sets
+ * swap in one place and nothing downstream hard-codes a value.
+ *
+ * Three theme states, deliberately: no data-theme means follow the device,
+ * data-theme="light" and data-theme="dark" are the reader's own choice and
+ * must beat the device setting in both directions.
+ */
 
-  /* Chart palette. Validated for colourblind separation against a white panel;
-     three of these fall below 3:1 contrast, which is why every chart here also
-     writes its values out in text. */
-  --series-1: #2a78d6;
-  --series-2: #eb6834;
-  --series-3: #1baf7a;
-  --series-4: #eda100;
-  --series-5: #e87ba4;
-  --series-6: #008300;
+:root {
+  color-scheme: light;
+
+  --bg: #eef1f5;
+  --panel: #ffffff;
+  --raised: #ffffff;
+  --ink: #101623;
+  --muted: #59617a;
+  --line: #d6dbe4;
+  --accent: #2a5bd7;
+  --accent-ink: #ffffff;
+
+  /* What you said, and the word being spoken aloud. */
+  --user: #e7edfb;
+  --user-ink: #101623;
+  --ai: #ffffff;
+  --mark: #d8e4ff;
+
+  --error: #a52a1f;
+  --error-bg: #fbeceb;
+
+  /* A correction is a white card with an accent edge, not a warning colour.
+     It is shown often, and red or amber every time would read as scolding. */
+  --fix-bg: #ffffff;
+  --fix-line: #d6dbe4;
+  --fix-accent: #2a5bd7;
+  --fix-badge: #e7edfb;
+  --badge-ink: #1f4bb5;
+  --fix-ink: #0f6b45;
+
+  --shadow-1: 0 1px 2px rgb(16 22 35 / 8%);
+  --shadow-2: 0 10px 28px -12px rgb(16 22 35 / 28%);
+  --shadow-tab: 0 1px 2px rgb(16 22 35 / 12%);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-pill: 999px;
+
+  --text-transcript: 19px;
+  --mic-size: 92px;
+  --reading-width: 880px;
+
+  /* Chart series: the Okabe-Ito set, separable for deuteran, protan and
+     tritan readers. Three of these fall below 3:1 on white, so every chart
+     also prints its value as text. */
+  --series-1: #0072b2;
+  --series-2: #e69f00;
+  --series-3: #009e73;
+  --series-4: #cc79a7;
+  --series-5: #d55e00;
+  --series-6: #56b4e9;
+  --chart-other: #8b93a5;
 
   /* One hue, light to dark, for "how much practice on this day". */
-  --chart-empty: #eceef1;
-  --chart-other: #9aa1ab;
-  --heat-1: #cde2fb;
-  --heat-2: #86b6ef;
-  --heat-3: #3987e5;
-  --heat-4: #1c5cab;
+  --chart-empty: #e2e7ef;
+  --heat-1: #bcd0f6;
+  --heat-2: #82a5ea;
+  --heat-3: #4b7ede;
+  --heat-4: #2a5bd7;
+}
+
+/*
+ * Dark is its own set of steps, not an inversion. Cards lift by becoming
+ * lighter than the ground, since a shadow cannot be seen against black.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg: #0e1218;
+    --panel: #171d26;
+    --raised: #1f2833;
+    --ink: #e6ebf2;
+    --muted: #9aa5b8;
+    --line: #2a3341;
+    --accent: #83a9ff;
+    --accent-ink: #0e1218;
+
+    --user: #1c2c4d;
+    --user-ink: #e6ebf2;
+    --ai: #1f2833;
+    --mark: #2f4570;
+
+    --error: #ff9c90;
+    --error-bg: #2a1a18;
+
+    --fix-bg: #171d26;
+    --fix-line: #2a3341;
+    --fix-accent: #83a9ff;
+    --fix-badge: #22304a;
+    --badge-ink: #a8c3ff;
+    --fix-ink: #6fdaa6;
+
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 40%);
+    --shadow-2: 0 10px 28px -12px rgb(0 0 0 / 70%);
+    --shadow-tab: 0 1px 2px rgb(0 0 0 / 45%);
+
+    /* The design's own dark series failed the colourblind and chroma checks,
+       so these are a validated set stepped for this surface instead. */
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --chart-other: #5a6473;
+
+    --chart-empty: #1c232d;
+    --heat-1: #26374f;
+    --heat-2: #33507a;
+    --heat-3: #4a71b0;
+    --heat-4: #83a9ff;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0e1218;
+  --panel: #171d26;
+  --raised: #1f2833;
+  --ink: #e6ebf2;
+  --muted: #9aa5b8;
+  --line: #2a3341;
+  --accent: #83a9ff;
+  --accent-ink: #0e1218;
+
+  --user: #1c2c4d;
+  --user-ink: #e6ebf2;
+  --ai: #1f2833;
+  --mark: #2f4570;
+
+  --error: #ff9c90;
+  --error-bg: #2a1a18;
+
+  --fix-bg: #171d26;
+  --fix-line: #2a3341;
+  --fix-accent: #83a9ff;
+  --fix-badge: #22304a;
+  --badge-ink: #a8c3ff;
+  --fix-ink: #6fdaa6;
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-2: 0 10px 28px -12px rgb(0 0 0 / 70%);
+  --shadow-tab: 0 1px 2px rgb(0 0 0 / 45%);
+
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --chart-other: #5a6473;
+
+  --chart-empty: #1c232d;
+  --heat-1: #26374f;
+  --heat-2: #33507a;
+  --heat-3: #4a71b0;
+  --heat-4: #83a9ff;
 }
 
 * {
@@ -70,27 +206,59 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: 12px 20px;
+  min-height: 56px;
+  padding: 8px 20px;
   background: var(--panel);
+  box-shadow: var(--shadow-1);
+  /* Above the scrolling panes, so its shadow falls on them. */
+  position: relative;
+  z-index: 5;
+}
+
+.topbar h1 {
+  margin-right: auto;
+}
+
+.topbar .ghost {
+  min-height: 44px;
+}
+
+/* A shadow is invisible against a dark ground, so the bar takes a hairline
+   instead — the same separation by a different means. */
+:root[data-theme="dark"] .topbar {
   border-bottom: 1px solid var(--line);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .topbar {
+    border-bottom: 1px solid var(--line);
+  }
+}
+
+/* A square button holding one glyph: the theme switch. */
+.icon-button {
+  width: 44px;
+  padding: 0;
+  font-size: 17px;
+  line-height: 1;
 }
 
 .topbar h1 {
   margin: 0;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .conversation {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  max-width: 760px;
+  gap: 10px;
+  max-width: var(--reading-width);
   width: 100%;
   margin: 0 auto;
 }
@@ -100,10 +268,13 @@ body {
   color: var(--muted);
 }
 
+/* Transcript type stays large: it is read while speaking out loud. */
 .turn {
-  max-width: 78%;
-  padding: 10px 14px;
-  border-radius: 14px;
+  max-width: 74%;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-transcript);
+  line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -112,20 +283,20 @@ body {
   align-self: flex-end;
   background: var(--user);
   color: var(--user-ink);
-  border-bottom-right-radius: 4px;
 }
 
 .turn.ai {
   align-self: flex-start;
   background: var(--ai);
-  border-bottom-left-radius: 4px;
+  box-shadow: var(--shadow-1);
 }
 
 .turn.error {
   align-self: flex-start;
   background: var(--error-bg);
   color: var(--error);
-  border: 1px solid #fecdca;
+  border: 1px solid var(--error);
+  font-size: 15px;
 }
 
 .turn.pending {
@@ -137,27 +308,28 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 78%;
+  max-width: 74%;
 }
 
 .correction {
-  padding: 10px 12px;
+  padding: 10px 14px;
   background: var(--fix-bg);
-  border: 1px solid var(--fix-line);
   border-left: 3px solid var(--fix-accent);
-  border-radius: 10px;
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  font-size: 16px;
 }
 
 .correction .badge {
   display: inline-block;
   margin-bottom: 6px;
-  padding: 1px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fix-accent);
+  padding: 4px 8px;
+  font: 600 11px/1 ui-monospace, Menlo, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--badge-ink);
   background: var(--fix-badge);
-  border-radius: 999px;
+  border-radius: 4px;
 }
 
 .correction .fix {
@@ -176,11 +348,12 @@ body {
 
 .correction .why {
   margin: 4px 0 0;
+  font-size: 13px;
   color: var(--muted);
 }
 
 .live {
-  max-width: 760px;
+  max-width: var(--reading-width);
   width: 100%;
   margin: 0 auto;
   padding: 0 20px 8px;
@@ -195,7 +368,7 @@ body {
 }
 
 .status {
-  max-width: 760px;
+  max-width: var(--reading-width);
   width: 100%;
   margin: 0 auto;
   padding: 0 20px;
@@ -213,22 +386,35 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding: 16px 20px 24px;
+  padding: 14px 20px 20px;
   background: var(--panel);
-  border-top: 1px solid var(--line);
+  box-shadow: 0 -1px 2px rgb(16 22 35 / 8%);
 }
 
+:root[data-theme="dark"] .controls {
+  box-shadow: 0 -1px 2px rgb(0 0 0 / 40%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .controls {
+    box-shadow: 0 -1px 2px rgb(0 0 0 / 40%);
+  }
+}
+
+/* The one thing that dominates this screen. The button itself is invisible;
+   the circle inside it is the object, with the label sitting underneath. */
 .mic {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 12px 22px;
+  gap: 6px;
+  padding: 0;
   font: inherit;
+  font-size: 14px;
   font-weight: 600;
-  color: #fff;
-  background: var(--accent);
+  color: var(--ink);
+  background: none;
   border: none;
-  border-radius: 999px;
   cursor: pointer;
 }
 
@@ -237,19 +423,32 @@ body {
   cursor: not-allowed;
 }
 
-.mic[aria-pressed="true"] {
-  background: #b42318;
+.mic-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--mic-size);
+  height: var(--mic-size);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: var(--shadow-2);
+  transition: background 0.15s;
 }
 
-.mic-icon {
-  width: 12px;
-  height: 12px;
+.mic-icon::after {
+  content: "";
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--accent-ink);
+}
+
+.mic[aria-pressed="true"] .mic-icon {
+  background: var(--error);
 }
 
 /* Pulses only while recording, so the recording state is obvious at a glance. */
-.mic[aria-pressed="true"] .mic-icon {
+.mic[aria-pressed="true"] .mic-icon::after {
   animation: pulse 1.1s ease-in-out infinite;
 }
 
@@ -270,9 +469,14 @@ body {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 10px 16px;
-  font-size: 14px;
+  gap: 10px 14px;
+  font-size: 13px;
   color: var(--muted);
+}
+
+.audio-row .ghost,
+.audio-row .toggle {
+  min-height: 44px;
 }
 
 .toggle {
@@ -304,10 +508,10 @@ body {
 }
 
 .turn mark {
-  background: #fde68a;
-  color: #1b1f24;
+  background: var(--mark);
+  color: var(--ink);
   border-radius: 3px;
-  padding: 0 1px;
+  padding: 0 2px;
 }
 
 .typed {
@@ -319,10 +523,12 @@ body {
 
 .typed input {
   flex: 1;
+  min-height: 44px;
   padding: 10px 12px;
   font: inherit;
+  font-size: 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--panel);
   color: inherit;
 }
@@ -335,12 +541,17 @@ body {
 }
 
 .ghost {
-  padding: 9px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 12px;
   font: inherit;
+  font-size: 13px;
   color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
@@ -349,30 +560,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mic[aria-pressed="true"] .mic-icon {
+  .mic[aria-pressed="true"] .mic-icon::after {
     animation: none;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14171a;
-    --panel: #1b1f23;
-    --ink: #e8eaed;
-    --muted: #9aa2ad;
-    --line: #2c3238;
-    --ai: #262c33;
-    --error: #ff9a92;
-    --error-bg: #3a1d1a;
-    --fix-bg: #2a2418;
-    --fix-line: #4b3f22;
-    --fix-accent: #f0b429;
-    --fix-badge: #3a3018;
-    --fix-ink: #6ee7a8;
-  }
-
-  .turn.error {
-    border-color: #6b2b25;
   }
 }
 
@@ -380,20 +569,20 @@ body {
 
 .tabs {
   display: flex;
-  gap: 4px;
+  gap: 3px;
   padding: 3px;
   background: var(--bg);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .tab {
-  padding: 6px 14px;
+  padding: 8px 14px;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--muted);
   background: none;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
 }
 
@@ -401,7 +590,18 @@ body {
   color: var(--ink);
   background: var(--panel);
   font-weight: 600;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+  box-shadow: var(--shadow-tab);
+}
+
+/* In dark the card is lighter than the ground, not shadowed. */
+:root[data-theme="dark"] .tab[aria-selected="true"] {
+  background: var(--raised);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .tab[aria-selected="true"] {
+    background: var(--raised);
+  }
 }
 
 /* ---------- report ---------- */
@@ -410,9 +610,33 @@ body {
   flex: 1;
   overflow-y: auto;
   width: 100%;
-  max-width: 860px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 20px 20px 40px;
+}
+
+/*
+ * Panels sit in two columns on a wide screen. The mistake log and the heatmap
+ * run full width: both are long, and halving them would only add scrolling.
+ */
+@media (min-width: 900px) {
+  #report-body {
+    display: grid;
+    /* minmax(0, ...) or a wide chart inside a column sets that column's
+       minimum and the two stop being equal. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  #report-body > .tiles,
+  #report-body > .panel.wide {
+    grid-column: 1 / -1;
+  }
+
+  #report-body > .panel {
+    margin-bottom: 0;
+  }
 }
 
 .report-head {
@@ -439,33 +663,35 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 12px;
+  padding: 12px 14px;
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
 }
 
 .tile-value {
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 600;
+  line-height: 1.1;
 }
 
 .tile-name {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--muted);
 }
 
 .panel {
   margin-bottom: 16px;
-  padding: 16px;
+  padding: 18px;
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
 }
 
 .panel h3 {
   margin: 0 0 12px;
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .panel-head {
@@ -520,9 +746,9 @@ body {
 }
 
 .bar-track {
-  height: 8px;
+  height: 6px;
   background: var(--bg);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 
@@ -559,12 +785,13 @@ body {
 
 .panel .badge {
   display: inline-block;
-  padding: 1px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fix-accent);
+  padding: 4px 8px;
+  font: 600 11px/1 ui-monospace, Menlo, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--badge-ink);
   background: var(--fix-badge);
-  border-radius: 999px;
+  border-radius: 4px;
 }
 
 .panel .fix {
@@ -614,7 +841,7 @@ body {
 
 .trend-bar {
   width: 100%;
-  max-width: 34px;
+  max-width: 40px;
   background: var(--accent);
   border-radius: 4px 4px 0 0;
 }
@@ -633,6 +860,16 @@ body {
   .topbar h1 {
     font-size: 15px;
   }
+
+  /* Thumbs need a bigger target than a cursor does. */
+  .tab {
+    min-height: 44px;
+  }
+
+  .tabs {
+    flex: 1;
+    justify-content: center;
+  }
 }
 
 /* ---------- settings ---------- */
@@ -648,23 +885,29 @@ body {
 .field-row select {
   flex: 1;
   min-width: 200px;
+  min-height: 44px;
   padding: 9px 10px;
   font: inherit;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   padding: 9px 16px;
   font: inherit;
+  font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: var(--accent-ink);
   background: var(--accent);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
@@ -705,7 +948,7 @@ body {
 }
 
 .pill.warn {
-  color: var(--fix-accent);
+  color: var(--badge-ink);
   background: var(--fix-badge);
 }
 
@@ -731,7 +974,7 @@ body {
 }
 
 .bar-fill.warn {
-  background: #d97706;
+  background: var(--series-2);
 }
 
 .bar-fill.danger {
@@ -765,9 +1008,9 @@ body {
   align-items: center;
   gap: 8px;
   width: 100%;
-  max-width: 760px;
+  max-width: var(--reading-width);
   margin: 0 auto;
-  padding: 10px 20px 0;
+  padding: 12px 20px 0;
 }
 
 .picker {
@@ -775,13 +1018,14 @@ body {
 }
 
 .session-bar select {
+  min-height: 44px;
   padding: 7px 10px;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .session-bar select:disabled,
@@ -792,17 +1036,18 @@ body {
 
 .session-bar #end-session {
   margin-left: auto;
+  min-height: 44px;
   padding: 7px 12px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .summary {
   align-self: stretch;
   margin-top: 8px;
-  padding: 16px;
+  padding: 18px;
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
 }
 
 .summary h3 {
@@ -872,12 +1117,12 @@ body {
 
 .auth-tabs {
   display: inline-flex;
-  gap: 4px;
+  gap: 3px;
   margin-bottom: 16px;
   padding: 3px;
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 999px;
+  box-shadow: var(--shadow-1);
+  border-radius: var(--radius-pill);
 }
 
 #clerk-sign-in,
@@ -896,10 +1141,10 @@ body {
 
 .get-key {
   margin: 0 0 14px;
-  padding: 12px;
+  padding: 14px;
   background: var(--bg);
   border: 1px dashed var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
 }
 
 .get-key-title {
@@ -928,10 +1173,9 @@ a.get-key-button:hover {
   padding: 10px 12px;
   font-size: 13px;
   color: var(--muted);
-  background: var(--fix-bg);
-  border: 1px solid var(--fix-line);
+  background: var(--bg);
   border-left: 3px solid var(--fix-accent);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .model-warning p {
@@ -1062,9 +1306,9 @@ a.get-key-button:hover {
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--muted);
-  border-radius: 8px;
-  width: 28px;
-  height: 28px;
+  border-radius: var(--radius-sm);
+  width: 32px;
+  height: 32px;
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
@@ -1084,8 +1328,8 @@ a.get-key-button:hover {
   padding: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 12px;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
 }
 
 .calendar-head {
@@ -1136,7 +1380,8 @@ a.get-key-button:hover {
 }
 
 .calendar-day:disabled {
-  color: #c3c7cd;
+  color: var(--muted);
+  opacity: 0.45;
   cursor: default;
 }
 
@@ -1155,7 +1400,7 @@ a.get-key-button:hover {
 }
 
 .calendar-day.has-mistakes::after {
-  background: var(--series-2);
+  background: var(--series-5);
 }
 
 .calendar-day.clean::after {
@@ -1167,12 +1412,12 @@ a.get-key-button:hover {
 }
 
 .calendar-day.picked {
-  background: #dbeafe;
+  background: var(--user);
 }
 
 .calendar-day.edge {
   background: var(--accent);
-  color: var(--user-ink);
+  color: var(--accent-ink);
 }
 
 .calendar-day.edge::after {
@@ -1214,7 +1459,7 @@ a.get-key-button:hover {
 }
 
 .calendar-legend .dot.has-mistakes {
-  background: var(--series-2);
+  background: var(--series-5);
 }
 
 .calendar-legend .dot.clean {
@@ -1264,7 +1509,7 @@ a.get-key-button:hover {
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgb(16 22 35 / 55%);
 }
 
 .modal-panel {
@@ -1272,9 +1517,9 @@ a.get-key-button:hover {
   max-height: 82vh;
   overflow-y: auto;
   background: var(--panel);
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   padding: 20px 22px 24px;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  box-shadow: var(--shadow-2);
 }
 
 .modal-head {
@@ -1314,16 +1559,17 @@ a.get-key-button:hover {
   gap: 6px;
   padding: 12px 8px 10px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: var(--panel);
   color: var(--ink);
   font: inherit;
   cursor: pointer;
-  transition: border-color 0.12s, transform 0.12s;
+  transition: border-color 0.12s, transform 0.12s, box-shadow 0.12s;
 }
 
 .voice-tile:hover {
   border-color: var(--accent);
+  box-shadow: var(--shadow-1);
   transform: translateY(-2px);
 }
 

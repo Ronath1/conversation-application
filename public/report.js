@@ -126,7 +126,8 @@ function renderByType(byType) {
 
 /** A square per day, so streaks and gaps show without reading any number. */
 function renderHeatmap(report) {
-  const section = element('section', 'panel');
+  // Full width: a six-month strip in half a screen would only scroll more.
+  const section = element('section', 'panel wide');
   section.append(element('h3', null, 'Practice by day'));
 
   if (report.calendar.length === 0) {
@@ -189,7 +190,7 @@ function renderTrend(trend) {
 }
 
 function renderRecurring(recurring) {
-  const section = element('section', 'panel');
+  const section = element('section', 'panel wide');
   section.append(element('h3', null, 'Repeated mistakes'));
 
   if (recurring.length === 0) {
@@ -259,7 +260,7 @@ function renderDatePicker(report) {
 }
 
 function renderLog(report) {
-  const section = element('section', 'panel');
+  const section = element('section', 'panel wide');
 
   const head = element('div', 'panel-head');
   head.append(element('h3', null, 'Every mistake'));
@@ -324,11 +325,13 @@ function renderLog(report) {
 
 function render(report) {
   const fragment = document.createDocumentFragment();
+  // Order matters once these sit in two columns: the two compact charts pair
+  // up on the first row, and everything long runs full width beneath them.
   fragment.append(
     renderTiles(report.totals),
     renderByType(report.byType),
-    renderHeatmap(report),
     renderTrend(report.trend),
+    renderHeatmap(report),
     renderRecurring(report.recurring),
     renderLog(report),
   );

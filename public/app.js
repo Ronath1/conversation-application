@@ -14,6 +14,7 @@ import * as settings from './settings.js';
 import * as auth from './auth.js';
 import { apiFetch } from './api.js';
 import { avatar, shortName } from './avatar.js';
+import { initTheme } from './theme.js';
 
 const conversationEl = document.getElementById('conversation');
 const liveEl = document.getElementById('live');
@@ -903,6 +904,10 @@ async function startApp() {
 }
 
 async function boot() {
+  // Before anything else: the theme applies to the sign-in screen too, and
+  // works whether or not sign-in is switched on.
+  initTheme(document.getElementById('theme-toggle'));
+
   const result = await auth.initAuth();
 
   if (result.error) {
